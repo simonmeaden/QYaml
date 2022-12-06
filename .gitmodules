@@ -1,0 +1,3 @@
+[submodule "libfyaml"]
+	path = libfyaml
+	url = https://github.com/pantoniou/libfyaml.git
