@@ -64,17 +64,17 @@ target_sources(
   PRIVATE
     # These have to be added to get MOC to work correctly apparently
     # Not certain if there is a better way - yet.
-    include/yaml/qyamlbuilder.h
-    include/yaml/qyamlhighlighter.h
-    include/yaml/qyamledit.h
+    include/qyaml/qyamlbuilder.h
+    include/qyaml/qyamlhighlighter.h
+    include/qyaml/qyamledit.h
     include/qyaml_global.h
     # end of MOC shit
 
 
     # YAML stuff
-    src/yaml/qyamlbuilder.cpp
-    src/yaml/qyamlhighlighter.cpp
-    src/yaml/qyamledit.cpp
+    src/qyaml/qyamlbuilder.cpp
+    src/qyaml/qyamlhighlighter.cpp
+    src/qyaml/qyamledit.cpp
 
 )
 

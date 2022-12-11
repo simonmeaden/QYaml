@@ -1,4 +1,4 @@
-#include "yaml/qyamlhighlighter.h"
+#include "qyaml/qyamlhighlighter.h"
 
 QYamlHighlighter::QYamlHighlighter(QObject *parent)
   : QSyntaxHighlighter{parent}

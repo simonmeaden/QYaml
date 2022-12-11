@@ -13,5 +13,9 @@ public:
 protected:
   // QSyntaxHighlighter interface
   void highlightBlock(const QString &text);
+
+  QColor m_backgroundColor;
+  QColor m_textColor;
+  QColor m_mapKeyColor;
 };
 

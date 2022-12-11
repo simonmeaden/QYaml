@@ -1,11 +1,11 @@
-#include "yaml/qyamledit.h"
-#include "yaml/qyamlhighlighter.h"
+#include "qyaml/qyamledit.h"
+#include "qyaml/qyamlhighlighter.h"
 
 #include <JlCompress.h>
 
 QYamlEdit::QYamlEdit(QWidget* parent)
   : LNPlainTextEdit(parent)
-  , m_highlighter(new YamlHighlighter(this))
+  , m_highlighter(new QYamlHighlighter(this))
 {
 }
 
