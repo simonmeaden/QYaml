@@ -1,11 +1,11 @@
 #pragma once
 
-#include "SMLibraries/widgets/lnplaintextedit.h"
+#include "lnplaintext/lnplaintextedit.h"
 
 #include "qyaml_global.h"
 
 class QYamlHighlighter;
-class YamlBuilder;
+class QYamlParser;
 
 class QYAML_SHARED_EXPORT QYamlEdit : public LNPlainTextEdit
 {
@@ -25,7 +25,7 @@ public:
   void setText(const QString& text);
 
 private:
-  YamlBuilder* m_parser;
+  QYamlParser* m_parser;
   QYamlHighlighter* m_highlighter;
   QString m_filename;
   QString m_zipFile;

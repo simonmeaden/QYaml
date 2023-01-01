@@ -1,12 +1,18 @@
 #include "qyaml/qyamledit.h"
+#include "qyaml/qyamlparser.h"
 #include "qyaml/qyamlhighlighter.h"
 
 #include <JlCompress.h>
 
 QYamlEdit::QYamlEdit(QWidget* parent)
   : LNPlainTextEdit(parent)
-  , m_highlighter(new QYamlHighlighter(this))
+  , m_parser(new QYamlParser(document(), this))
+  , m_highlighter(new QYamlHighlighter(m_parser, this))
 {
+  connect(m_parser,
+          &QYamlParser::parseComplete,
+          m_highlighter,
+          &QYamlHighlighter::rehighlight);
 }
 
 const QString
@@ -47,12 +53,11 @@ QYamlEdit::setText(const QString& text)
              this,
              &QYamlEdit::textHasChanged);
   QPlainTextEdit::setPlainText(text);
-  //   m_parser->parseString(text);
+  m_parser->parse(text);
   connect(LNPlainTextEdit::document(),
           &QTextDocument::contentsChange,
           this,
           &QYamlEdit::textHasChanged);
-  m_highlighter->rehighlight();
 }
 
 void

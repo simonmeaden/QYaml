@@ -1,26 +1,12 @@
 cmake_minimum_required(VERSION 3.7)
 
-project(libqyaml VERSION 0.1.0 LANGUAGES CXX)
+project(QYaml VERSION 0.1.0 LANGUAGES CXX)
 
 add_library(${PROJECT_NAME} "")
-add_library(QYaml::QYaml ALIAS libqyaml)
+add_library(QYaml::QYaml ALIAS ${PROJECT_NAME})
 
-find_package(Qt6
-  REQUIRED
-  COMPONENTS
-    Core
-    Gui
-    Widgets
-    Network
-    Xml
-    Svg
-    LinguistTools
-  OPTIONAL_COMPONENTS
-    Core5Compat
-#  PATHS
-#    /opt/Qt/6.4.1/gcc_64/lib
-)
-if (NOT Qt6_FOUND)
+if (USE_QT_VERSION EQUAL 5)
+    message("QT5")
     find_package(Qt5
       REQUIRED
       COMPONENTS
@@ -31,35 +17,77 @@ if (NOT Qt6_FOUND)
         Xml
         Svg
         LinguistTools
-#      PATHS
-#        /opt/Qt/5.15.2/gcc_64/lib
     )
-  if (Qt5_FOUND)
-    message("Qt SM Libraries Qt5 Found ")
-  endif()
+    set(CMAKE_AUTOMOC ON)
+    set(CMAKE_AUTOUIC ON)
+    set(CMAKE_AUTORCC ON)
+    include(GNUInstallDirs)
+elseif(USE_QT_VERSION EQUAL 6)
+    message("QT6")
+    find_package(Qt6
+      REQUIRED
+      COMPONENTS
+        Core
+        Gui
+        Widgets
+        Network
+        Xml
+        Svg
+        LinguistTools
+      OPTIONAL_COMPONENTS
+        Core5Compat
+    )
+    qt_standard_project_setup()
 else()
-  message("Qt SM Libraries Qt6 Found")
+    find_package(Qt6
+      REQUIRED
+      COMPONENTS
+        Core
+        Gui
+        Widgets
+        Network
+        Xml
+        Svg
+        LinguistTools
+      OPTIONAL_COMPONENTS
+        Core5Compat
+    )
+    qt_standard_project_setup()
+    if (NOT Qt6_FOUND)
+        find_package(Qt5
+          REQUIRED
+          COMPONENTS
+            Core
+            Gui
+            Widgets
+            Network
+            Xml
+            Svg
+            LinguistTools
+        )
+        set(CMAKE_AUTOMOC ON)
+        set(CMAKE_AUTOUIC ON)
+        set(CMAKE_AUTORCC ON)
+        include(GNUInstallDirs)
+    endif()
 endif()
 
-qt_standard_project_setup()
-
-add_subdirectory(libfyaml)
-
-target_include_directories(libqyaml
+target_include_directories(${PROJECT_NAME}
     PUBLIC 
-        $<INSTALL_INTERFACE:include>    
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        include
+#        $<INSTALL_INTERFACE:include>
+#        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_compile_options(libqyaml 
+target_compile_options(${PROJECT_NAME}
     PRIVATE 
         -Werror
 )
 
 target_sources(
-    libqyaml
+    ${PROJECT_NAME}
 
   PRIVATE
     # These have to be added to get MOC to work correctly apparently
@@ -67,6 +95,9 @@ target_sources(
     include/qyaml/qyamlbuilder.h
     include/qyaml/qyamlhighlighter.h
     include/qyaml/qyamledit.h
+    include/qyaml/qyamlparser.h
+    include/qyaml/qyamldocument.h
+    include/qyaml/yamlnode.h
     include/qyaml_global.h
     # end of MOC shit
 
@@ -75,15 +106,18 @@ target_sources(
     src/qyaml/qyamlbuilder.cpp
     src/qyaml/qyamlhighlighter.cpp
     src/qyaml/qyamledit.cpp
+    src/qyaml/qyamlparser.cpp
+    src/qyaml/qyamldocument.cpp
+    src/qyaml/yamlnode.cpp
 
 )
 
-target_compile_features(libqyaml 
+target_compile_features(${PROJECT_NAME}
     PRIVATE 
         cxx_std_17
 )
 
-target_link_libraries(libqyaml
+target_link_libraries(${PROJECT_NAME}
     PUBLIC
         Qt${QT_VERSION_MAJOR}::Core
         Qt${QT_VERSION_MAJOR}::Widgets
@@ -92,9 +126,11 @@ target_link_libraries(libqyaml
         Qt${QT_VERSION_MAJOR}::Network
         Qt${QT_VERSION_MAJOR}::Xml
         Qt${QT_VERSION_MAJOR}::Svg
-        SMLibraries::SMLibraries
+        Widgets::Widgets
         QuaZip::QuaZip
-        fyaml
+        Utilities::Utilities
+        QLNPlainText::QLNPlainText
+        yaml-cpp
 )
 
 option(BUILD_DOC "Build documentation" ON)
