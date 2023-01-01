@@ -121,38 +121,23 @@ QYamlHighlighter::setMapFormat(YamlNode* node, int blockStart, int textLength)
   auto n = dynamic_cast<YamlMap*>(node);
   if (n) {
     switch (n->flowType()) {
-      case YamlNode::Flow:
-      setFormat(n->startPos(), 1, m_mapFormat);
-      setFormat(n->endPos() - 1, 1, m_mapFormat);
+      case YamlNode::Flow: {
+        auto start = n->startPos() - blockStart;
+        auto end = n->endPos() - blockStart;
+        if (start >= 0 && start < textLength) {
+          setFormat(start, 1, m_mapFormat);
+        }
+        if (end >= 0 && end < textLength) {
+          setFormat(end, 1, m_mapFormat);
+        }
         break;
+      }
       case YamlNode::Block:
         // TODO
         break;
       default:
         break;
     }
-
-    //    for (auto child : n->data()) {
-    //      switch (child->type()) {
-    //      case YamlNode::Scalar: {
-    //          setScalarFormat(n, blockStart, textLength);
-    //      }
-    //      case YamlNode::Map: {
-    //          setMapFormat(child, blockStart, textLength);
-    //          break;
-    //      }
-    //      case YamlNode::Sequence: {
-    //          setSequenceFormat(child, blockStart, textLength);
-    //          break;
-    //      }
-    //      case YamlNode::Comment: {
-    //          setCommentFormat(node, blockStart, textLength);
-    //          break;
-    //      }
-    //      default:
-    //          break;
-    //      }
-    //    }
   }
 }
 
@@ -165,14 +150,21 @@ QYamlHighlighter::setSequenceFormat(YamlNode* node,
   auto n = dynamic_cast<YamlSequence*>(node);
   if (n) {
     switch (n->flowType()) {
-    case YamlNode::Flow:
-        setFormat(n->startPos(), 1, m_seqFormat);
-        setFormat(n->endPos() - 1, 1, m_seqFormat);
+      case YamlNode::Flow: {
+        auto start = n->startPos() - blockStart;
+        auto end = n->endPos() - blockStart;
+        if (start >= 0 && start < textLength) {
+          setFormat(start, 1, m_seqFormat);
+        }
+        if (end >= 0 && end < textLength) {
+          setFormat(end, 1, m_seqFormat);
+        }
         break;
-    case YamlNode::Block:
+      }
+      case YamlNode::Block:
         // TODO
         break;
-    default:
+      default:
         break;
     }
     //  for (auto child : n->data()) {

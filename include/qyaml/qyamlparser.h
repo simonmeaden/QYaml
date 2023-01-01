@@ -95,5 +95,6 @@ private:
     void parseFlowSequence(YamlSequence* sequence, int& i, const QString& text);
     void parseFlowMap(YamlMap* map, int& i, const QString& text);
     YamlComment* parseComment(int& i, const QString& text);
+    YamlScalar* parseScalar(const QString&t, int i);
 };
 
