@@ -1,4 +1,5 @@
 #include "qyaml/qyamlhighlighter.h"
+#include "qyaml/qyamldocument.h"
 #include "qyaml/qyamledit.h"
 #include "qyaml/qyamlparser.h"
 #include "qyaml/yamlnode.h"
@@ -38,7 +39,11 @@ QYamlHighlighter::QYamlHighlighter(QYamlParser* parser, QYamlEdit* parent)
 void
 QYamlHighlighter::highlightBlock(const QString& text)
 {
-  auto nodes = m_parser->nodes();
+  auto doc = m_parser->currentDoc();
+  if (!doc)
+    return;
+
+  auto nodes = doc->nodes();
   auto size = nodes.size();
   if (nodes.isEmpty())
     return;
@@ -47,7 +52,7 @@ QYamlHighlighter::highlightBlock(const QString& text)
   auto blockStart = block.position();
   auto textLength = text.length();
 
-  for (auto node : m_parser->nodes()) {
+  for (auto node : nodes) {
     auto nodeStart = node->startPos();
     auto nodeEnd = node->endPos();
 
@@ -70,6 +75,14 @@ QYamlHighlighter::highlightBlock(const QString& text)
         setMapFormat(node, blockStart, text.length());
         break;
       }
+      case YamlNode::MapItem: {
+        auto n = qobject_cast<YamlMapItem*>(node);
+        auto type = n->data()->type();
+        if (n) {
+          setMapItemFormat(n, blockStart, text.length());
+        }
+        break;
+      }
       case YamlNode::Sequence: {
         setSequenceFormat(node, blockStart, text.length());
         break;
@@ -90,11 +103,28 @@ QYamlHighlighter::setScalarFormat(YamlNode* node,
                                   int textLength)
 {
   FormatSize formatable;
-  auto n = dynamic_cast<YamlScalar*>(node);
+  auto n = qobject_cast<YamlScalar*>(node);
   if (n) {
     if (isFormatable(
           n->startPos(), n->length(), blockStart, textLength, formatable)) {
       setFormat(formatable.start, formatable.length, m_scalarFormat);
+    }
+  }
+}
+
+void
+QYamlHighlighter::setKeyFormat(YamlMapItem* node,
+                               int blockStart,
+                               int textLength)
+{
+  FormatSize formatable;
+  if (node) {
+    if (isFormatable(node->startPos(),
+                     node->keyLength(),
+                     blockStart,
+                     textLength,
+                     formatable)) {
+      setFormat(formatable.start, formatable.length, m_mapKeyFormat);
     }
   }
 }
@@ -105,7 +135,7 @@ QYamlHighlighter::setCommentFormat(YamlNode* node,
                                    int textLength)
 {
   FormatSize formatable;
-  auto n = dynamic_cast<YamlComment*>(node);
+  auto n = qobject_cast<YamlComment*>(node);
   if (n) {
     if (isFormatable(
           n->startPos(), n->length(), blockStart, textLength, formatable)) {
@@ -118,7 +148,7 @@ void
 QYamlHighlighter::setMapFormat(YamlNode* node, int blockStart, int textLength)
 {
   FormatSize formatable;
-  auto n = dynamic_cast<YamlMap*>(node);
+  auto n = qobject_cast<YamlMap*>(node);
   if (n) {
     switch (n->flowType()) {
       case YamlNode::Flow: {
@@ -142,12 +172,49 @@ QYamlHighlighter::setMapFormat(YamlNode* node, int blockStart, int textLength)
 }
 
 void
+QYamlHighlighter::setMapItemFormat(YamlMapItem* node,
+                                   int blockStart,
+                                   int textLength)
+{
+  if (node) {
+    auto n = node->data();
+    switch (n->type()) {
+      case YamlNode::Scalar: {
+        setKeyFormat(node, blockStart, textLength);
+        setScalarFormat(n, blockStart, textLength);
+        break;
+      }
+      case YamlNode::Map: {
+        setKeyFormat(node, blockStart, textLength);
+        setMapFormat(n, blockStart, textLength);
+        break;
+      }
+      case YamlNode::MapItem: { // should never happen
+        setMapItemFormat(qobject_cast<YamlMapItem*>(n), blockStart, textLength);
+        break;
+      }
+      case YamlNode::Sequence: {
+        setKeyFormat(node, blockStart, textLength);
+        setSequenceFormat(n, blockStart, textLength);
+        break;
+      }
+      case YamlNode::Comment: { // should never happen
+        setCommentFormat(n, blockStart, textLength);
+        break;
+      }
+      default:
+        break;
+    }
+  }
+}
+
+void
 QYamlHighlighter::setSequenceFormat(YamlNode* node,
                                     int blockStart,
                                     int textLength)
 {
   FormatSize formatable;
-  auto n = dynamic_cast<YamlSequence*>(node);
+  auto n = qobject_cast<YamlSequence*>(node);
   if (n) {
     switch (n->flowType()) {
       case YamlNode::Flow: {
@@ -167,27 +234,27 @@ QYamlHighlighter::setSequenceFormat(YamlNode* node,
       default:
         break;
     }
-    //  for (auto child : n->data()) {
-    //    switch (child->type()) {
-    //    case YamlNode::Scalar: {
-    //      setScalarFormat(n, blockStart, textLength);
-    //    }
-    //    case YamlNode::Map: {
-    //      setMapFormat(child, blockStart, textLength);
-    //      break;
-    //    }
-    //    case YamlNode::Sequence: {
-    //      setSequenceFormat(child, blockStart, textLength);
-    //      break;
-    //    }
-    //    case YamlNode::Comment: {
-    //      setCommentFormat(node, blockStart, textLength);
-    //      break;
-    //    }
-    //    default:
-    //      break;
-    //    }
-    //  }
+    for (auto child : n->data()) {
+      switch (child->type()) {
+        case YamlNode::Scalar: {
+          setScalarFormat(n, blockStart, textLength);
+        }
+        case YamlNode::Map: {
+          setMapFormat(child, blockStart, textLength);
+          break;
+        }
+        case YamlNode::Sequence: {
+          setSequenceFormat(child, blockStart, textLength);
+          break;
+        }
+        case YamlNode::Comment: {
+          setCommentFormat(node, blockStart, textLength);
+          break;
+        }
+        default:
+          break;
+      }
+    }
   }
 }
 

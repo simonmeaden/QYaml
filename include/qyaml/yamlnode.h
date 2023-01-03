@@ -1,25 +1,9 @@
-#ifndef YAMLNODE_H
-#define YAMLNODE_H
+#pragma once
 
 #include <QObject>
 #include <QTextCursor>
 
-enum YamlError
-{
-  NoErrors = 0,
-  InvalidVersionError,
-  TooManyYamlDirectivesError,
-};
-Q_DECLARE_FLAGS(YamlErrors, YamlError)
-Q_DECLARE_OPERATORS_FOR_FLAGS(YamlErrors)
-
-enum YamlWarning
-{
-  NoWarnings = 0,
-  InvalidMinorVersionWarning,
-};
-Q_DECLARE_FLAGS(YamlWarnings, YamlWarning)
-Q_DECLARE_OPERATORS_FOR_FLAGS(YamlWarnings)
+#include "qyaml/yamlerrors.h"
 
 class YamlNode : public QObject
 {
@@ -36,6 +20,7 @@ public:
     Undefined,
     Scalar,
     Map,
+    MapItem,
     Sequence,
     Comment,
   };
@@ -182,26 +167,47 @@ private:
   Style m_style;
 };
 
+class YamlMapItem : public YamlNode
+{
+  Q_OBJECT
+public:
+  YamlMapItem(QObject* parent);
+  YamlMapItem(const QString& key, YamlNode* data, QObject* parent);
+
+  const QString& key() const;
+  void setKey(const QString& key);
+  int keyLength() const;
+
+  YamlNode* data() const;
+  void setData(YamlNode* data);
+
+//  const QTextCursor& keyStart() const;
+//  int keyStartPos();
+//  void setKeyStart(const QTextCursor& keyStart);
+
+private:
+  QString m_key;
+  YamlNode* m_data = nullptr;
+  QTextCursor m_keyStart;
+  QTextCursor m_dataStart;
+};
+
 class YamlMap : public YamlNode
 {
   Q_OBJECT
 public:
   YamlMap(QObject* parent = nullptr);
-  YamlMap(QMap<QString, YamlNode*> data, QObject* parent = nullptr);
+  YamlMap(QMap<QString, YamlMapItem*> data, QObject* parent = nullptr);
 
-  QMap<QString, YamlNode*> data() const;
-  void setData(QMap<QString, YamlNode*> data);
-  bool insert(const QString& key, YamlNode* data);
-  //  bool insert(const QString& key,
-  //              YamlNode* data,
-  //              QTextCursor start,
-  //              QTextCursor end);
+  QMap<QString, YamlMapItem*> data() const;
+  void setData(QMap<QString, YamlMapItem*> data);
+  bool insert(const QString& key, YamlMapItem* data);
   int remove(const QString& key);
-  YamlNode* value(const QString& key);
+  YamlMapItem* value(const QString& key);
   bool contains(const QString& key);
 
 private:
-  QMap<QString, YamlNode*> m_data;
+  QMap<QString, YamlMapItem*> m_data;
 };
 
 class YamlSequence : public YamlNode
@@ -241,4 +247,3 @@ private:
   QString m_data;
 };
 
-#endif // YAMLNODE_H

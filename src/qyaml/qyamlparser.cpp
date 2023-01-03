@@ -1,4 +1,5 @@
 #include "qyaml/qyamlparser.h"
+#include "qyaml/qyamldocument.h"
 #include "utilities/characters.h"
 
 //====================================================================
@@ -30,31 +31,6 @@ QYamlParser::prettyPrint() const
   return QString();
 }
 
-bool
-QYamlParser::parseLine(const QString& line)
-{
-  // TODO
-  return false;
-}
-
-void
-QYamlParser::addScalarToSequence(YamlSequence* sequence,
-                                 const QString t,
-                                 int& tStart,
-                                 int& indent)
-{
-  auto node = new YamlScalar(t, this);
-  sequence->append(node);
-  auto cursor = createCursor(tStart);
-  node->setStart(cursor);
-  cursor = createCursor(tStart + t.length());
-  node->setEnd(cursor);
-  node->setIndent(indent);
-  m_nodes.insert(cursor, node);
-  tStart = 0;
-  indent = 0;
-}
-
 void
 QYamlParser::parseYamlDirective(QString s,
                                 int& tStart,
@@ -74,29 +50,24 @@ QYamlParser::parseYamlDirective(QString s,
       s = split.at(1);
       c = s.at(0);
       int minor = c.digitValue();
-      auto node = new YamlDirective(major, minor, this);
-      auto cursor = createCursor(tStart);
-      node->setStart(cursor);
-      cursor = createCursor(i);
-      node->setEnd(cursor);
-      node->setRow(row);
-      node->setIndent(indent);
-      if (major == VERSION_MAJOR) {
-        node->setError(InvalidVersionError, false);
-        if (minor >= 0 && minor <= VERSION_MINOR) {
-          node->setWarning(InvalidMinorVersionWarning, false);
+      if (m_currentDoc && m_currentDoc->majorVersion() > 0) {
+        m_currentDoc->setMajorVersion(major);
+        m_currentDoc->setMinorVersion(minor);
+        m_currentDoc->setDocumentStart(createCursor(tStart));
+        m_currentDoc->setDocumentEnd(createCursor(i));
+        if (major == VERSION_MAJOR) {
+          m_currentDoc->setError(InvalidVersionError, false);
+          if (minor >= 0 && minor <= VERSION_MINOR) {
+            m_currentDoc->setWarning(InvalidMinorVersionWarning, false);
+          } else {
+            m_currentDoc->setWarning(InvalidMinorVersionWarning, true);
+          }
         } else {
-          node->setWarning(InvalidMinorVersionWarning, true);
+          m_currentDoc->setError(InvalidVersionError, true);
         }
       } else {
-        node->setError(InvalidVersionError, true);
+        m_currentDoc->setError(TooManyYamlDirectivesError, true);
       }
-      if (hasYamlDirective) {
-        node->setError(TooManyYamlDirectivesError, true);
-      } else {
-        node->setError(TooManyYamlDirectivesError, false);
-      }
-      m_nodes.insert(cursor, node);
       tStart = 0;
       indent = 0;
     } else {
@@ -106,7 +77,7 @@ QYamlParser::parseYamlDirective(QString s,
 }
 
 bool
-QYamlParser::parse(const QString& text, int startPos)
+QYamlParser::parse(const QString& text, int startPos, int length)
 {
   m_text = text;
 
@@ -125,9 +96,13 @@ QYamlParser::parse(const QString& text, int startPos)
   QTextCursor cursor;
   auto hasYamlDirective = false;
 
+  m_currentDoc = new QYamlDocument(this);
+  append(m_currentDoc);
+
   for (auto i = start; i < text.size(); i++) {
     auto c = text.at(i);
     if (c == Characters::NEWLINE) {
+      // TODO add parseScalar()
       auto s = t.trimmed();
       parseYamlDirective(s, tStart, i, c, hasYamlDirective, row, indent);
       row++;
@@ -146,26 +121,31 @@ QYamlParser::parse(const QString& text, int startPos)
     } else if (c == Characters::HASH) { // comments
       auto comment = parseComment(i, text);
       if (comment) {
-        m_nodes.insert(comment->start(), comment);
+        m_currentDoc->addData(comment);
       }
       continue;
+    } else if (c == Characters::COLON) { // start map flow
+      qWarning();
     } else if (c == Characters::OPEN_CURLY_BRACKET) { // start map flow
       auto map = new YamlMap(this);
       map->setStart(createCursor(i));
       map->setFlowType(YamlNode::Flow);
       parseFlowMap(map, ++i, text);
-      m_nodes.insert(map->start(), map);
+      m_currentDoc->addData(map);
     } else if (c == Characters::CLOSE_CURLY_BRACKET) { // end map flow
-      t += c;
+      // should happen in parseFlowMap
+      // TODO error ?
+      qWarning();
     } else if (c == Characters::OPEN_SQUARE_BRACKET) { // start sequence flow
       auto sequence = new YamlSequence(this);
       sequence->setStart(createCursor(i));
       sequence->setFlowType(YamlNode::Flow);
       parseFlowSequence(sequence, ++i, text);
-      m_nodes.insert(sequence->start(), sequence);
+      m_currentDoc->addData(sequence);
     } else if (c == Characters::CLOSE_SQUARE_BRACKET) { // end sequence flow
       // should happen in parseFlowSequence.
-      t += c;
+      // TODO error ?
+      qWarning();
     } else if (c == '-') {
       if (!isHyphen) {
         isHyphen = true;
@@ -173,17 +153,17 @@ QYamlParser::parse(const QString& text, int startPos)
       }
       t += c;
       if (t == "---") {
-        //        isDocStart = true;
-        node = new YamlStart(this);
-        cursor = createCursor(tStart);
-        node->setStart(cursor);
-        cursor = createCursor(i);
-        node->setEnd(cursor);
-        node->setRow(row);
-        node->setIndent(indent);
-        m_nodes.insert(cursor, node);
-        tStart = 0;
-        indent = 0;
+        // TODO new document
+        //        node = new YamlStart(this);
+        //        cursor = createCursor(tStart);
+        //        node->setStart(cursor);
+        //        cursor = createCursor(i);
+        //        node->setEnd(cursor);
+        //        node->setRow(row);
+        //        node->setIndent(indent);
+        //        m_currentDoc->addData(node);
+        //        tStart = 0;
+        //        indent = 0;
       }
       continue;
 
@@ -246,25 +226,24 @@ QYamlParser::parseFlowSequence(YamlSequence* sequence,
       // comment
       auto comment = parseComment(i, text);
       if (comment) {
-        m_nodes.insert(comment->start(), comment);
+        m_currentDoc->addData(comment);
       }
     } else if (c == Characters::OPEN_CURLY_BRACKET) { // start map flow
       auto subMap = new YamlMap(this);
       subMap->setStart(createCursor(i));
       parseFlowMap(subMap, ++i, text);
       sequence->append(subMap);
-      m_nodes.insert(subMap->start(), subMap);
       continue;
     } else if (c == Characters::CLOSE_CURLY_BRACKET) { // end map flow
       // TODO error?
       qWarning();
-    } else if (c == Characters::OPEN_SQUARE_BRACKET) { // end sequence flow
+    } else if (c == Characters::OPEN_SQUARE_BRACKET) {
+      // end sequence flow
       auto subSequence = new YamlSequence(this);
       subSequence->setStart(createCursor(i));
       subSequence->setFlowType(YamlNode::Flow);
       parseFlowSequence(subSequence, ++i, text);
       sequence->append(subSequence);
-      m_nodes.insert(subSequence->start(), subSequence);
     } else if (c == Characters::CLOSE_SQUARE_BRACKET) { // end sequence flow
       sequence->setEnd(createCursor(i));
       if (!t.isEmpty()) { // only if missing final comma
@@ -290,54 +269,79 @@ QYamlParser::parseFlowMap(YamlMap* map, int& i, const QString& text)
 {
   QString t;
   QString key;
+  int keyStart = -1;
+  bool stringLiteral = false;
+  bool foldedLiteral = false;
 
   while (i < text.length()) {
     auto c = text.at(i);
     if (c == Characters::NEWLINE) {
-      qWarning();
+      if (!t.isEmpty()) {
+        t += Characters::SPACE; // new lines inside strings are ignored.
+      }
+      i++;
+      continue;
     } else if (c == Characters::COLON) {
       if (!t.isEmpty()) {
         key = t;
+        keyStart = i - key.length();
         t.clear();
       }
-    } else if (c == Characters::MINUS) {
-      i++;
-      if (i < text.size()) {
-        c = text.at(i);
-        if (c.isSpace()) {
-          // must be a BLOCK SEQUENCE if followed by a space
-        }
+    } else if (c == Characters::VERTICALLINE) {
+      // TODO flow string literal.
+      if (t.isEmpty()) {
+        stringLiteral = true;
+      }
+    } else if (c == Characters::GT) {
+      // TODO flow string literal.
+      if (t.isEmpty()) {
+        foldedLiteral = true;
+      }
+    } else if (c == Characters::COMMA) {
+      // TODO maps & sequences at comma
+      if (!t.isEmpty() && !key.isEmpty()) {
+        auto scalar = parseScalar(t, i);
+        auto item = new YamlMapItem(key, scalar, this);
+        item->setStart(createCursor(keyStart));
+        item->setEnd(scalar->end());
+        map->insert(key, item);
+        t.clear();
+        key.clear();
+        keyStart = -1;
       }
     } else if (c == Characters::HASH) { // comment
       // TODO comments ALWAYS finish scalars.
       auto comment = parseComment(i, text);
       if (comment) {
-        m_nodes.insert(comment->start(), comment);
+        m_currentDoc->addData(comment);
       }
-    } else if (c == Characters::OPEN_CURLY_BRACKET) { // start map flow
+    } else if (c == Characters::OPEN_CURLY_BRACKET) { // start sub map flow
       auto subMap = new YamlMap(this);
       subMap->setStart(createCursor(i));
+      subMap->setFlowType(YamlNode::Flow);
       parseFlowMap(subMap, ++i, text);
       if (!key.isEmpty()) {
-        map->insert(key, subMap);
-        m_nodes.insert(subMap->start(), subMap);
+        auto item = new YamlMapItem(key, subMap, this);
+        item->setStart(createCursor(keyStart));
+        item->setEnd(subMap->end());
+        map->insert(key, item);
         key.clear();
+        keyStart = -1;
       } else {
         // TODO error map item has no key.
       }
       continue;
     } else if (c == Characters::CLOSE_CURLY_BRACKET) { // end map flow
       map->setEnd(createCursor(i));
-      if (!t.isEmpty()) { // only if missing final comma
-        auto scalar = new YamlScalar(t, this);
-        if (!key.isEmpty()) {
-          map->insert(key, scalar);
-          m_nodes.insert(scalar->start(), scalar);
-          key.clear();
-        } else {
-          // TODO error map item has no key.
-        }
+      if (!t.isEmpty() && !key.isEmpty()) { // only if missing final comma
+        auto scalar = parseScalar(t, i);
+        auto item = new YamlMapItem(key, scalar, this);
+        item->setStart(createCursor(keyStart));
+        item->setEnd(createCursor(i));
+        map->insert(key, item);
         t.clear();
+        key.clear();
+        keyStart = -1;
       }
       i++;
       return;
@@ -347,9 +351,12 @@ QYamlParser::parseFlowMap(YamlMap* map, int& i, const QString& text)
       subSequence->setFlowType(YamlNode::Flow);
       parseFlowSequence(subSequence, ++i, text);
       if (!key.isEmpty()) {
-        map->insert(key, subSequence);
-        m_nodes.insert(subSequence->start(), subSequence);
+        auto item = new YamlMapItem(key, subSequence, this);
+        item->setStart(createCursor(keyStart));
+        item->setEnd(subSequence->end());
+        map->insert(key, item);
         key.clear();
+        keyStart = -1;
       } else {
         // TODO error map item has no key.
       }
@@ -391,9 +398,10 @@ QYamlParser::parseComment(int& i, const QString& text)
 YamlScalar*
 QYamlParser::parseScalar(const QString& t, int i)
 {
+  auto start = i - t.length();
   auto scalar = new YamlScalar(t, this);
-  scalar->setStart(createCursor(i));
-  m_nodes.insert(scalar->start(), scalar);
+  scalar->setStart(createCursor(start));
+  scalar->setEnd(createCursor(i));
   return scalar;
 }
 
@@ -441,17 +449,32 @@ QYamlParser::documents() const
   return m_documents;
 }
 
+QYamlDocument*
+QYamlParser::document(int index)
+{
+  if (index >= 0 && index < count()) {
+    return m_documents.at(index);
+  }
+  return nullptr;
+}
+
 QString
 QYamlParser::text() const
 {
   return m_text;
 }
 
-const QMap<QTextCursor, YamlNode*>&
-QYamlParser::nodes() const
+QYamlDocument*
+QYamlParser::currentDoc() const
 {
-  return m_nodes;
+  return m_currentDoc;
 }
+
+// const QMap<QTextCursor, YamlNode*>&
+// QYamlParser::nodes() const
+//{
+//   return m_nodes;
+// }
 
 void
 QYamlParser::setDocuments(QList<QYamlDocument*> root)

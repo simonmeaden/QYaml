@@ -3,11 +3,13 @@
 #include <QColor>
 #include <QSyntaxHighlighter>
 
+#include "qyaml/yamlnode.h"
 #include "qyaml_global.h"
 
 class QYamlParser;
 class QYamlEdit;
 class YamlNode;
+class YamlMapItem;
 
 class QYAML_SHARED_EXPORT QYamlHighlighter : public QSyntaxHighlighter
 {
@@ -77,7 +79,10 @@ private:
                     int textLength,
                     FormatSize& result);
   void setScalarFormat(YamlNode *node, int blockStart, int textLength);
+  void setKeyFormat(YamlMapItem *node, int blockStart, int textLength);
   void setCommentFormat(YamlNode *node, int blockStart, int textLength);
   void setMapFormat(YamlNode *node, int blockStart, int textLength);
+  void setMapItemFormat(YamlMapItem *node, int blockStart, int textLength);
   void setSequenceFormat(YamlNode *node, int blockStart, int textLength);
+
 };

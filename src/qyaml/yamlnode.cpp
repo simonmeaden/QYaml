@@ -130,12 +130,14 @@ YamlNode::type() const
   return m_type;
 }
 
-YamlNode::FlowType YamlNode::flowType() const
+YamlNode::FlowType
+YamlNode::flowType() const
 {
   return m_flowType;
 }
 
-void YamlNode::setFlowType(YamlNode::FlowType flowType)
+void
+YamlNode::setFlowType(YamlNode::FlowType flowType)
 {
   m_flowType = flowType;
 }
@@ -167,50 +169,36 @@ YamlMap::YamlMap(QObject* parent)
   m_type = Map;
 }
 
-YamlMap::YamlMap(QMap<QString, YamlNode*> data, QObject* parent)
+YamlMap::YamlMap(QMap<QString, YamlMapItem*> data, QObject* parent)
   : YamlNode(parent)
   , m_data(data)
 {
   m_type = Map;
 }
 
-QMap<QString, YamlNode*>
+QMap<QString, YamlMapItem*>
 YamlMap::data() const
 {
   return m_data;
 }
 
 void
-YamlMap::setData(QMap<QString, YamlNode*> data)
+YamlMap::setData(QMap<QString, YamlMapItem*> data)
 {
   m_data = data;
 }
 
 bool
-YamlMap::insert(const QString& key, YamlNode* data)
+YamlMap::insert(const QString& key, YamlMapItem* data)
 {
   if (data) {
-    if (!m_data.contains(key)) {
-      m_data.insert(key, data);
-      return true;
-    }
+    //    if (!m_data.contains(key)) {
+    m_data.insert(key, data);
+    return true;
+    //    }
   }
   return false;
 }
-
-// bool
-// YamlMap::insert(const QString& key,
-//                 YamlNode* data,
-//                 QTextCursor start,
-//                 QTextCursor end)
-//{
-//   if (data) {
-//     insert(key, data);
-//     setStartMark(key, start);
-//     setEndMark(key, end);
-//   }
-//   return false;
-// }
 
 int
 YamlMap::remove(const QString& key)
@@ -218,7 +206,7 @@ YamlMap::remove(const QString& key)
   return m_data.remove(key);
 }
 
-YamlNode*
+YamlMapItem*
 YamlMap::value(const QString& key)
 {
   return m_data.value(key);
@@ -229,6 +217,79 @@ YamlMap::contains(const QString& key)
 {
   return m_data.contains(key);
 }
+
+//====================================================================
+//=== YamlMapItem
+//====================================================================
+YamlMapItem::YamlMapItem(QObject* parent)
+  : YamlNode(parent)
+{
+  m_type = MapItem;
+}
+
+YamlMapItem::YamlMapItem(const QString& key, YamlNode* data, QObject* parent)
+  : YamlNode(parent)
+  , m_key{ key }
+  , m_data{ data }
+{
+  m_type = MapItem;
+}
+
+const QString&
+YamlMapItem::key() const
+{
+  return m_key;
+}
+
+void
+YamlMapItem::setKey(const QString& key)
+{
+  m_key = key;
+}
+
+int
+YamlMapItem::keyLength() const
+{
+  return m_key.length();
+}
+
+YamlNode*
+YamlMapItem::data() const
+{
+  return m_data;
+}
+
+void
+YamlMapItem::setData(YamlNode* data)
+{
+  m_data = data;
+}
+
+// const QTextCursor&
+// YamlMapItem::keyStart() const
+//{
+//   return m_keyStart;
+// }
+
+// int YamlMapItem::keyStartPos() {
+//   return m_keyStart.position();
+// }
+
+// void
+// YamlMapItem::setKeyStart(const QTextCursor& keyStart)
+//{
+//   m_keyStart = keyStart;
+// }
+
+// const QTextCursor &YamlMapItem::dataStart() const
+//{
+//   return m_dataStart;
+// }
+
+// void YamlMapItem::setDataStart(const QTextCursor &dataStart)
+//{
+//   m_dataStart = dataStart;
+// }
 
 //====================================================================
 //=== YamlSequence
@@ -280,7 +341,7 @@ YamlSequence::indexOf(YamlNode* node)
   return m_data.indexOf(node);
 }
 
-//void YamlSequence::setEnd(const QTextCursor &end)
+// void YamlSequence::setEnd(const QTextCursor &end)
 //{
 
 //}
@@ -321,7 +382,8 @@ YamlScalar::style() const
   return m_style;
 }
 
-int YamlScalar::length() const
+int
+YamlScalar::length() const
 {
   return m_data.length();
 }

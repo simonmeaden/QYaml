@@ -2,124 +2,282 @@
 #include "qyaml/yamlnode.h"
 
 //====================================================================
-//=== YamlDocument
+//=== QYamlDocument
 //====================================================================
-YamlDocument::YamlDocument(QObject* parent)
-    : QObject(parent)
+QYamlDocument::QYamlDocument(QObject* parent)
+  : QObject(parent)
 {
 }
 
 int
-YamlDocument::majorVersion() const
+QYamlDocument::majorVersion() const
 {
-    return m_majorVersion;
+  return m_majorVersion;
 }
 
 void
-YamlDocument::setMajorVersion(int Major)
+QYamlDocument::setMajorVersion(int Major)
 {
-    m_majorVersion = Major;
+  m_majorVersion = Major;
 }
 
 int
-YamlDocument::minorVersion() const
+QYamlDocument::minorVersion() const
 {
-    return m_minorVersion;
+  return m_minorVersion;
 }
 
 void
-YamlDocument::setMinorVersion(int Minor)
+QYamlDocument::setMinorVersion(int Minor)
 {
-    m_minorVersion = Minor;
+  m_minorVersion = Minor;
 }
 
 bool
-YamlDocument::implicitStart() const
+QYamlDocument::implicitStart() const
 {
-    return m_implicitStart;
+  return m_implicitStart;
 }
 
 void
-YamlDocument::setImplicitStart(bool ExplicitStart)
+QYamlDocument::setImplicitStart(bool ExplicitStart)
 {
-    m_implicitStart = ExplicitStart;
+  m_implicitStart = ExplicitStart;
 }
 
 bool
-YamlDocument::isImplicitVersion() const
+QYamlDocument::isImplicitVersion() const
 {
-    return m_implicitVersion;
+  return m_implicitVersion;
 }
 
 void
-YamlDocument::setImplicitVersion(bool ExplicitVersion)
+QYamlDocument::setImplicitVersion(bool ExplicitVersion)
 {
-    m_implicitVersion = ExplicitVersion;
+  m_implicitVersion = ExplicitVersion;
 }
 
 QTextCursor
-YamlDocument::documentStart()
+QYamlDocument::documentStart()
 {
-    return m_start;
+  return m_start;
 }
 
 void
-YamlDocument::setDocumentStart(QTextCursor mark)
+QYamlDocument::setDocumentStart(QTextCursor mark)
 {
-    m_start = mark;
+  m_start = mark;
 }
 
 QTextCursor
-YamlDocument::documentEnd()
+QYamlDocument::documentEnd()
 {
-    return m_end;
+  return m_end;
 }
 
 void
-YamlDocument::setDocumentEnd(QTextCursor mark)
+QYamlDocument::setDocumentEnd(QTextCursor mark)
 {
-    m_end = mark;
+  m_end = mark;
 }
 
 bool
-YamlDocument::implicitEnd() const
+QYamlDocument::implicitEnd() const
 {
-    return m_implicitEnd;
+  return m_implicitEnd;
 }
 
 void
-YamlDocument::setImplicitEnd(bool ImplicitEnd)
+QYamlDocument::setImplicitEnd(bool ImplicitEnd)
 {
-    m_implicitEnd = ImplicitEnd;
+  m_implicitEnd = ImplicitEnd;
 }
 
 bool
-YamlDocument::getExplicitTags() const
+QYamlDocument::getExplicitTags() const
 {
-    return explicitTags;
+  return explicitTags;
 }
 
 void
-YamlDocument::setExplicitTags(bool ExplicitTags)
+QYamlDocument::setExplicitTags(bool ExplicitTags)
 {
-    explicitTags = ExplicitTags;
+  explicitTags = ExplicitTags;
 }
 
 QList<YamlNode*>
-YamlDocument::data() const
+QYamlDocument::data() const
 {
-    return m_data;
+  return m_data;
 }
 
-YamlNode
-YamlDocument::data(int index) const
+YamlNode*
+QYamlDocument::data(int index)
 {
-    return m_data.at(index);
+  return m_data.at(index);
 }
 
 bool
-YamlDocument::addData(YamlNode* data)
+QYamlDocument::addData(YamlNode* data)
 {
-    m_data.append(data);
-    return true;
+  switch (data->type()) {
+    case YamlNode::Comment:
+      m_data.append(data);
+      m_nodes.insert(data->start(), data);
+      return true;
+    case YamlNode::Scalar:
+      m_data.append(data);
+      m_nodes.insert(data->start(), data);
+      return true;
+    case YamlNode::Sequence: {
+      m_data.append(data);
+      return addSequenceData(qobject_cast<YamlSequence*>(data));
+    }
+    case YamlNode::Map: {
+      m_data.append(data);
+      return addMapData(qobject_cast<YamlMap*>(data));
+    }
+    default:
+      return false;
+  }
+}
+
+bool
+QYamlDocument::addSequenceData(YamlSequence* sequence, YamlMapItem* item)
+{
+  if (item) // sub sequence in map
+    m_nodes.insert(item->start(), item);
+  else
+    m_nodes.insert(sequence->start(), sequence);
+
+  for (auto data : sequence->data()) {
+    switch (data->type()) {
+      case YamlNode::Comment:
+        //        m_nodes.insert(data->start(), data);
+        break;
+      case YamlNode::Scalar:
+        m_nodes.insert(data->start(), data);
+        break;
+      case YamlNode::Sequence:
+        addSequenceData(qobject_cast<YamlSequence*>(data));
+        break;
+      case YamlNode::Map:
+        addMapData(qobject_cast<YamlMap*>(data));
+        break;
+      default:
+        return false; // should only happen on error.
+    }
+  }
+  return false;
+}
+
+bool
+QYamlDocument::addMapData(YamlMap* map, YamlMapItem* item)
+{
+  if (item) // sub map in map
+    m_nodes.insert(item->start(), item);
+  else
+    m_nodes.insert(map->start(), map);
+
+  bool result = true;
+  if (map) {
+    for (auto key : map->data().keys()) {
+      auto i = map->value(key);
+      auto data = i->data();
+      switch (data->type()) {
+        case YamlNode::Comment:
+          //          m_nodes.insert(data->start(), data);
+          break;
+        case YamlNode::Scalar:
+          m_nodes.insert(data->start(), i);
+          break;
+        case YamlNode::Sequence: {
+          addSequenceData(qobject_cast<YamlSequence*>(data), i);
+          break;
+        }
+        case YamlNode::Map: {
+          addMapData(qobject_cast<YamlMap*>(data), i);
+          break;
+        }
+        case YamlNode::MapItem: {
+          bool r = addMapItemData(qobject_cast<YamlMapItem*>(data));
+          if (!r)
+            result = false;
+          break;
+        }
+        default:
+          return false; // should only happen on error.
+      }
+    }
+  }
+  return true;
+}
+
+bool
+QYamlDocument::addMapItemData(YamlMapItem* item)
+{
+  if (item) {
+    auto data = item->data();
+    if (data) {
+      switch (data->type()) {
+        case YamlNode::Comment:
+          //          m_nodes.insert(data->start(), data);
+          return true;
+        case YamlNode::Scalar:
+          m_nodes.insert(item->start(), item);
+          return true;
+        case YamlNode::Sequence: {
+          return addSequenceData(qobject_cast<YamlSequence*>(data));
+        }
+        case YamlNode::Map: {
+          return addMapData(qobject_cast<YamlMap*>(data));
+        }
+        default:
+          return false;
+      }
+    }
+  }
+  return false;
+}
+
+const YamlErrors&
+QYamlDocument::errors() const
+{
+  return m_errors;
+}
+
+void
+QYamlDocument::setError(const YamlError& error, bool set)
+{
+  m_errors.setFlag(error, set);
+}
+
+void
+QYamlDocument::setErrors(const YamlErrors& newErrors)
+{
+  m_errors = newErrors;
+}
+
+const YamlWarnings&
+QYamlDocument::warnings() const
+{
+  return m_warnings;
+}
+
+void
+QYamlDocument::setWarning(const YamlWarning& warning, bool set)
+{
+  m_warnings.setFlag(warning, set);
+}
+
+void
+QYamlDocument::setWarnings(const YamlWarnings& newWarnings)
+{
+  m_warnings = newWarnings;
+}
+
+const QMap<QTextCursor, YamlNode*>&
+QYamlDocument::nodes() const
+{
+  return m_nodes;
 }

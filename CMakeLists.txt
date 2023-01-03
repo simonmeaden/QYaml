@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.7)
 
 project(QYaml VERSION 0.1.0 LANGUAGES CXX)
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 add_library(${PROJECT_NAME} "")
 add_library(QYaml::QYaml ALIAS ${PROJECT_NAME})
 
@@ -98,6 +101,7 @@ target_sources(
     include/qyaml/qyamlparser.h
     include/qyaml/qyamldocument.h
     include/qyaml/yamlnode.h
+    include/qyaml/yamlerrors.h
     include/qyaml_global.h
     # end of MOC shit
 
