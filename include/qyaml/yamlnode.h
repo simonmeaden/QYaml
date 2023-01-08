@@ -71,7 +71,7 @@ private:
   YamlNode* m_parent;
   int m_indent = 0;
   int m_row = 0;
-  int column = 0;
+  int m_column = 0;
   QTextCursor m_start;
   QTextCursor m_end;
   int m_length;

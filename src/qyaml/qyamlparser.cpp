@@ -5,41 +5,27 @@
 //====================================================================
 //=== QYamlParser
 //====================================================================
-const QRegularExpression QYamlParser::YAML_DIRECTIVE("%YAML 1.[0-3]");
-const QRegularExpression QYamlParser::YAML_DOCSTART("[-]{3}");
-const QRegularExpression QYamlParser::YAML_DOCEND("[.]{3}");
-const QString QYamlParser::VERSION_STRING = "1.2";
-const QString QYamlParser::VERSION_PATCH_STRING = "1.2.2";
+const QString QYamlParser::VERSION_STRING = QStringLiteral("1.2");
+const QString QYamlParser::VERSION_PATCH_STRING = QStringLiteral("1.2.2");
+const QString QYamlParser::DOCSTART = QStringLiteral("---");
+const QString QYamlParser::DOCEND = QStringLiteral("...");
 
-QYamlParser::QYamlParser(QTextDocument* doc, QObject* parent)
-  : QObject{ parent }
-  , m_document(doc)
-{
-}
+QYamlParser::QYamlParser(QTextDocument *doc, QObject *parent)
+    : QObject{parent}, m_document(doc) {}
 
-QString
-QYamlParser::inlinePrint() const
-{
+QString QYamlParser::inlinePrint() const {
   // TODO
   return QString();
 }
 
-QString
-QYamlParser::prettyPrint() const
-{
+QString QYamlParser::prettyPrint() const {
   // TODO
   return QString();
 }
 
-void
-QYamlParser::parseYamlDirective(QString s,
-                                int& tStart,
-                                int i,
-                                QChar c,
-                                bool hasYamlDirective,
-                                int row,
-                                int& indent)
-{
+void QYamlParser::parseYamlDirective(QString s, int &tStart, int i, QChar c,
+                                     bool hasYamlDirective, int row,
+                                     int &indent) {
   if (s.startsWith("%YAML")) {
     s = s.mid(5).trimmed();
     auto split = s.split(".", Qt::SkipEmptyParts);
@@ -53,8 +39,6 @@ QYamlParser::parseYamlDirective(QString s,
       if (m_currentDoc && m_currentDoc->majorVersion() > 0) {
         m_currentDoc->setMajorVersion(major);
         m_currentDoc->setMinorVersion(minor);
-        m_currentDoc->setDocumentStart(createCursor(tStart));
-        m_currentDoc->setDocumentEnd(createCursor(i));
         if (major == VERSION_MAJOR) {
           m_currentDoc->setError(InvalidVersionError, false);
           if (minor >= 0 && minor <= VERSION_MINOR) {
@@ -76,9 +60,7 @@ QYamlParser::parseYamlDirective(QString s,
   }
 }
 
-bool
-QYamlParser::parse(const QString& text, int startPos, int length)
-{
+bool QYamlParser::parse(const QString &text, int startPos, int length) {
   m_text = text;
 
   auto row = 0;
@@ -87,7 +69,8 @@ QYamlParser::parse(const QString& text, int startPos, int length)
   auto tStart = -1;
   auto indent = 0;
   auto rowStart = 0;
-  YamlNode* node = nullptr;
+  auto pos = 0;
+  YamlNode *node = nullptr;
   auto isTagStart = false;
   auto isAnchorStart = false;
   auto isLinkStart = false;
@@ -96,8 +79,36 @@ QYamlParser::parse(const QString& text, int startPos, int length)
   QTextCursor cursor;
   auto hasYamlDirective = false;
 
-  m_currentDoc = new QYamlDocument(this);
-  append(m_currentDoc);
+  if (text.contains(DOCSTART)) {
+    while ((pos = text.indexOf(DOCSTART, pos)) != -1) {
+      auto document = new QYamlDocument(this);
+      document->setDocumentStart(createCursor(pos++));
+      append(document);
+    }
+    QList<int> ends;
+    pos = 0;
+    while ((pos = text.indexOf(DOCEND, pos)) != -1) {
+      ends.append(pos++);
+    }
+    if (!ends.isEmpty()) {
+      for (auto end : ends) {
+        for (int i = 0; i < m_documents.size() - 1; i++) {
+          auto doc = m_documents.at(i);
+          auto nextDoc = m_documents.at(i + 1);
+          if (end > doc->documentStart().position() &&
+              end < nextDoc->documentStart().position()) {
+            doc->setDocumentEnd(createCursor(end));
+          }
+        }
+      }
+    }
+    m_currentDoc = m_documents.at(0);
+  } else {
+    m_currentDoc = new QYamlDocument(this);
+    m_currentDoc->setDocumentStart(createCursor(0));
+    m_currentDoc->setDocumentEnd(createCursor(text.length()));
+    append(m_currentDoc);
+  }
 
   for (auto i = start; i < text.size(); i++) {
     auto c = text.at(i);
@@ -197,11 +208,8 @@ QYamlParser::parse(const QString& text, int startPos, int length)
   return true;
 }
 
-void
-QYamlParser::parseFlowSequence(YamlSequence* sequence,
-                               int& i,
-                               const QString& text)
-{
+void QYamlParser::parseFlowSequence(YamlSequence *sequence, int &i,
+                                    const QString &text) {
   QString t;
 
   while (i < text.length()) {
@@ -264,9 +272,7 @@ QYamlParser::parseFlowSequence(YamlSequence* sequence,
   }
 }
 
-void
-QYamlParser::parseFlowMap(YamlMap* map, int& i, const QString& text)
-{
+void QYamlParser::parseFlowMap(YamlMap *map, int &i, const QString &text) {
   QString t;
   QString key;
   int keyStart = -1;
@@ -375,9 +381,7 @@ QYamlParser::parseFlowMap(YamlMap* map, int& i, const QString& text)
   }
 }
 
-YamlComment*
-QYamlParser::parseComment(int& i, const QString& text)
-{
+YamlComment *QYamlParser::parseComment(int &i, const QString &text) {
   auto comment = new YamlComment(this);
   comment->setStart(createCursor(i));
   // todo set indent
@@ -395,9 +399,7 @@ QYamlParser::parseComment(int& i, const QString& text)
   return nullptr;
 }
 
-YamlScalar*
-QYamlParser::parseScalar(const QString& t, int i)
-{
+YamlScalar *QYamlParser::parseScalar(const QString &t, int i) {
   auto start = i - t.length();
   auto scalar = new YamlScalar(t, this);
   scalar->setStart(createCursor(start));
@@ -405,21 +407,11 @@ QYamlParser::parseScalar(const QString& t, int i)
   return scalar;
 }
 
-bool
-QYamlParser::resolveAnchors()
-{
-  return true;
-}
+bool QYamlParser::resolveAnchors() { return true; }
 
-const QString
-QYamlParser::filename() const
-{
-  return m_filename;
-}
+const QString QYamlParser::filename() const { return m_filename; }
 
-bool
-QYamlParser::loadFile(const QString& filename)
-{
+bool QYamlParser::loadFile(const QString &filename) {
   m_filename = filename;
   QFile file(m_filename);
   if (file.open(QIODevice::ReadOnly)) {
@@ -429,9 +421,7 @@ QYamlParser::loadFile(const QString& filename)
   return false;
 }
 
-bool
-QYamlParser::loadFromZip(const QString& zipFile, const QString& href)
-{
+bool QYamlParser::loadFromZip(const QString &zipFile, const QString &href) {
   m_filename = href;
   m_zipFile = zipFile;
   auto fileName = JlCompress::extractFile(zipFile, href);
@@ -443,32 +433,18 @@ QYamlParser::loadFromZip(const QString& zipFile, const QString& href)
   return false;
 }
 
-QList<QYamlDocument*>
-QYamlParser::documents() const
-{
-  return m_documents;
-}
+QList<QYamlDocument *> QYamlParser::documents() const { return m_documents; }
 
-QYamlDocument*
-QYamlParser::document(int index)
-{
+QYamlDocument *QYamlParser::document(int index) {
   if (index >= 0 && index < count()) {
     return m_documents.at(index);
   }
   return nullptr;
 }
 
-QString
-QYamlParser::text() const
-{
-  return m_text;
-}
+QString QYamlParser::text() const { return m_text; }
 
-QYamlDocument*
-QYamlParser::currentDoc() const
-{
-  return m_currentDoc;
-}
+QYamlDocument *QYamlParser::currentDoc() const { return m_currentDoc; }
 
 // const QMap<QTextCursor, YamlNode*>&
 // QYamlParser::nodes() const
@@ -476,63 +452,37 @@ QYamlParser::currentDoc() const
 //   return m_nodes;
 // }
 
-void
-QYamlParser::setDocuments(QList<QYamlDocument*> root)
-{
+void QYamlParser::setDocuments(QList<QYamlDocument *> root) {
   m_documents = root;
 }
 
-void
-QYamlParser::append(QYamlDocument* document)
-{
+void QYamlParser::append(QYamlDocument *document) {
   m_documents.append(document);
 }
 
-bool
-QYamlParser::isMultiDocument()
-{
-  return (m_documents.size() > 1);
-}
+bool QYamlParser::isMultiDocument() { return (m_documents.size() > 1); }
 
-bool
-QYamlParser::isEmpty()
-{
-  return m_documents.empty();
-}
+bool QYamlParser::isEmpty() { return m_documents.empty(); }
 
-int
-QYamlParser::count()
-{
-  return m_documents.size();
-}
+int QYamlParser::count() { return m_documents.size(); }
 
-QList<QYamlDocument*>::iterator
-QYamlParser::begin()
-{
+QList<QYamlDocument *>::iterator QYamlParser::begin() {
   return m_documents.begin();
 }
 
-QList<QYamlDocument*>::const_iterator
-QYamlParser::constBegin()
-{
+QList<QYamlDocument *>::const_iterator QYamlParser::constBegin() {
   return m_documents.constBegin();
 }
 
-QList<QYamlDocument*>::iterator
-QYamlParser::end()
-{
+QList<QYamlDocument *>::iterator QYamlParser::end() {
   return m_documents.end();
 }
 
-QList<QYamlDocument*>::const_iterator
-QYamlParser::constEnd()
-{
+QList<QYamlDocument *>::const_iterator QYamlParser::constEnd() {
   return m_documents.constEnd();
 }
 
-QTextCursor
-QYamlParser::createCursor(int position)
-{
+QTextCursor QYamlParser::createCursor(int position) {
   auto cursor = QTextCursor(m_document);
   cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, position);
   return cursor;

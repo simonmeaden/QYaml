@@ -49,13 +49,13 @@ YamlNode::setRow(int row)
 int
 YamlNode::getColumn() const
 {
-  return column;
+  return m_column;
 }
 
 void
 YamlNode::setColumn(int column)
 {
-  this->column = column;
+  this->m_column = column;
 }
 
 const QTextCursor&
