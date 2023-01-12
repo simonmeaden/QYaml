@@ -5,8 +5,6 @@
 #include <QRegularExpression>
 #include <QTextDocument>
 
-#include "quazip/JlCompress.h"
-
 #include "qyaml/yamlnode.h"
 #include "qyaml_global.h"
 
@@ -17,9 +15,20 @@ class YamlAnchor;
 class QYAML_SHARED_EXPORT QYamlParser : public QObject {
   Q_OBJECT
 
-  enum DocSplits {
-    DocStart,
-    DocEnd,
+  struct Directive {
+    enum Type {
+      NOTYPE,
+      YAML,
+      TAG,
+    };
+
+    int start = -1;
+    int length = -1; // TODO bad version
+
+    int major = 1;
+    int minor = 2;
+    QString text;
+    Type type = NOTYPE;
   };
 
 public:
@@ -65,7 +74,7 @@ public:
   bool isMultiDocument();
   bool isEmpty();
   int count();
-  QYamlDocument *currentDoc() const;
+  //  QYamlDocument *currentDoc() const;
 
   QList<QYamlDocument *>::iterator begin();
   QList<QYamlDocument *>::const_iterator constBegin();
@@ -83,7 +92,7 @@ protected:
 private:
   QString m_text;
   QTextDocument *m_document = nullptr;
-  QYamlDocument *m_currentDoc = nullptr;
+  //  QYamlDocument *m_currentDoc = nullptr;
   //    QMap<QTextCursor, YamlNode*> m_nodes;
   QMap<QString, YamlAnchor *> m_anchors;
   QList<QYamlDocument *> m_documents;
@@ -102,17 +111,18 @@ private:
 
   static const QString DOCSTART;
   static const QString DOCEND;
-//  static const QRegularExpression YAML_DIRECTIVE;
-//  static const QRegularExpression YAML_DOCSTART;
-//  static const QRegularExpression YAML_DOCEND;
+  static const QRegularExpression YAML_DIRECTIVE;
+  static const QRegularExpression TAG_DIRECTIVE;
 
   QYamlDocument *parseDocumentStart(struct fy_event *event);
   bool resolveAnchors();
   QTextCursor createCursor(int position);
-  void parseYamlDirective(QString s, int &tStart, int i, QChar c,
-                          bool hasYamlDirective, int row, int &indent);
-  void parseFlowSequence(YamlSequence *sequence, int &i, const QString &text);
-  void parseFlowMap(YamlMap *map, int &i, const QString &text);
-  YamlComment *parseComment(int &i, const QString &text);
-  YamlScalar *parseScalar(const QString &t, int i);
+  void parseFlowSequence(YamlSequence *sequence, int &i, const QString &text,
+                         int docStart);
+  void parseFlowMap(YamlMap *map, int &i, const QString &text, int docStart);
+  YamlComment *parseComment(int &i, const QString &text, int docStart);
+  YamlScalar *parseScalar(const QString &t, int i, int docStart);
+  QYamlDocument *splitMultiDocument(const QString &text);
+  void setTagDirectives(QYamlDocument *document,
+                        QMap<int, Directive *> &directives, int pos);
 };

@@ -2,17 +2,16 @@
 
 #include <QObject>
 
-enum YamlError
-{
+enum YamlError {
   NoErrors = 0,
   InvalidVersionError,
+  BadYamlDirective,
   TooManyYamlDirectivesError,
 };
 Q_DECLARE_FLAGS(YamlErrors, YamlError)
 Q_DECLARE_OPERATORS_FOR_FLAGS(YamlErrors)
 
-enum YamlWarning
-{
+enum YamlWarning {
   NoWarnings = 0,
   InvalidMinorVersionWarning,
 };

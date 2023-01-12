@@ -48,7 +48,19 @@ public:
   const QColor &mapColor() const;
   void setMapColor(const QColor &mapColor);
 
-  protected:
+  QColor tagColor() const;
+  void setTagColor(const QColor &tagColor);
+
+  QColor directiveColor() const;
+  void setDirectiveColor(const QColor &directiveColor);
+
+  QColor docStartColor() const;
+  void setDocStartColor(const QColor &docStartColor);
+
+  QColor docEndColor() const;
+  void setDocEndColor(const QColor &docEndColor);
+
+protected:
 private:
   // QSyntaxHighlighter interface
   void highlightBlock(const QString& text);
@@ -62,7 +74,11 @@ private:
   QColor m_seqColor;
   QColor m_seqValueColor;
   QColor m_scalarColor;
+  QColor m_directiveColor;
+  QColor m_tagColor;
   QColor m_commentColor;
+  QColor m_docStartColor;
+  QColor m_docEndColor;
 
   QTextCharFormat m_textFormat;
   QTextCharFormat m_mapFormat;
@@ -72,6 +88,10 @@ private:
   QTextCharFormat m_seqValueFormat;
   QTextCharFormat m_commentFormat;
   QTextCharFormat m_scalarFormat;
+  QTextCharFormat m_directiveFormat;
+  QTextCharFormat m_tagFormat;
+  QTextCharFormat m_docStartFormat;
+  QTextCharFormat m_docEndFormat;
 
   bool isFormatable(int nodeStart,
                     int nodeLength,
@@ -81,8 +101,11 @@ private:
   void setScalarFormat(YamlNode *node, int blockStart, int textLength);
   void setKeyFormat(YamlMapItem *node, int blockStart, int textLength);
   void setCommentFormat(YamlNode *node, int blockStart, int textLength);
+  void setDirectiveFormat(YamlNode *node, int blockStart, int textLength);
+  void setTagFormat(YamlNode *node, int blockStart, int textLength);
   void setMapFormat(YamlNode *node, int blockStart, int textLength);
   void setMapItemFormat(YamlMapItem *node, int blockStart, int textLength);
   void setSequenceFormat(YamlNode *node, int blockStart, int textLength);
-
+  void setStartTagFormat(YamlNode *node, int blockStart, int textLength);
+  void setEndTagFormat(YamlNode *node, int blockStart, int textLength);
 };
