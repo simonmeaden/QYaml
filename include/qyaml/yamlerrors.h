@@ -7,6 +7,8 @@ enum YamlError {
   InvalidVersionError,
   BadYamlDirective,
   TooManyYamlDirectivesError,
+
+  IllegalFirstCharacter,
 };
 Q_DECLARE_FLAGS(YamlErrors, YamlError)
 Q_DECLARE_OPERATORS_FOR_FLAGS(YamlErrors)

@@ -132,8 +132,8 @@ class YamlScalar : public YamlNode {
 public:
   enum Style {
     PLAIN,
-    SINGLE_QUOTED,
-    DOUBLE_QUOTED,
+    SINGLEQUOTED,
+    DOUBLEQUOTED,
   };
   YamlScalar(QObject *parent = nullptr);
   YamlScalar(QString value, QObject *parent = nullptr);
@@ -142,9 +142,11 @@ public:
   void setData(const QString &data);
 
   Style style() const;
+  void setStyle(Style style);
 
   // YamlNode interface
   int length() const override;
+
 
 private:
   QString m_data;

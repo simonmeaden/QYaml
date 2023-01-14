@@ -10,7 +10,7 @@ QYamlHighlighter::QYamlHighlighter(QYamlParser *parser, QYamlEdit *parent)
       m_textColor(QColorConstants::Black),
       m_backgroundColor(QColorConstants::White),
       m_mapColor(QColorConstants::X11::LightBlue),
-      m_mapKeyColor(QColorConstants::X11::MediumBlue),
+      m_mapKeyColor(QColorConstants::X11::chocolate),
       m_mapValueColor(QColorConstants::X11::DarkBlue),
       m_seqValueColor(QColorConstants::X11::OrangeRed),
       m_seqColor(QColorConstants::X11::DarkOrange),
@@ -216,7 +216,7 @@ void QYamlHighlighter::setEndTagFormat(YamlNode *node, int blockStart,
 
 void QYamlHighlighter::setMapFormat(YamlNode *node, int blockStart,
                                     int textLength) {
-  FormatSize formatable;
+
   auto n = qobject_cast<YamlMap *>(node);
   if (n) {
     switch (n->flowType()) {

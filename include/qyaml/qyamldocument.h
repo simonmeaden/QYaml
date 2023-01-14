@@ -14,10 +14,11 @@ class YamlMapItem;
 class YamlDirective;
 class YamlTagDirective;
 
-class QYAML_SHARED_EXPORT QYamlDocument : public QObject {
+class QYAML_SHARED_EXPORT QYamlDocument : public QObject
+{
   Q_OBJECT
 public:
-  explicit QYamlDocument(QObject *parent);
+  explicit QYamlDocument(QObject* parent);
 
   //! Returns the major version value.
   //!
@@ -70,7 +71,9 @@ public:
   int startPos();
 
   //! Sets the QTextCursor for the start of the document text.
-  void setStart(QTextCursor position, YamlStart *start = nullptr);
+  void setStart(QTextCursor position, YamlStart* start = nullptr);
+
+  bool hasStart();
 
   //! Returns the QTextCursor for the end of the document text.
   QTextCursor end();
@@ -79,7 +82,9 @@ public:
   int endPos();
 
   //! Sets the QTextCursor for the end of the document text.
-  void setEnd(QTextCursor mark, YamlEnd *end = nullptr);
+  void setEnd(QTextCursor mark, YamlEnd* end = nullptr);
+
+  bool hasEnd();
 
   //! Returns the text length for this document.
   int textLength();
@@ -113,56 +118,58 @@ public:
   void setExplicitTags(bool ExplicitTags);
 
   //! Returns the yaml root node list.
-  QList<YamlNode *> data() const;
+  QList<YamlNode*> data() const;
 
   //! Returns the yaml root node item at index.
-  YamlNode *data(int index);
+  YamlNode* data(int index);
 
   //! Adds a YamlNode* to the document and returns true if successful, otherwise
   //! returns false.
   //!
   //! Only scalars, maps and sequences can be added to the document. Other
   //! types are internal sub types of these types.
-  bool addData(YamlNode *Data);
+  bool addData(YamlNode* Data);
 
   //! returns the list of document errors.
-  const YamlErrors &errors() const;
+  const YamlErrors& errors() const;
 
   //! Sets/clears an error for the document
-  void setError(const YamlError &error, bool set);
+  void setError(const YamlError& error, bool set);
 
   //! Sets a number of errors for the document
-  void setErrors(const YamlErrors &newErrors);
+  void setErrors(const YamlErrors& newErrors);
 
   //! returns the list of document warnings.
-  const YamlWarnings &warnings() const;
+  const YamlWarnings& warnings() const;
 
   //! Sets/clears a warning for the document
-  void setWarning(const YamlWarning &warning, bool set);
+  void setWarning(const YamlWarning& warning, bool set);
 
   //! Sets a number of warnings for the document#include "qyaml/yamlnode.h"
 
-  void setWarnings(const YamlWarnings &newWarnings);
+  void setWarnings(const YamlWarnings& newWarnings);
 
-  const QMap<QTextCursor, YamlNode *> &nodes() const;
+  const QMap<QTextCursor, YamlNode*>& nodes() const;
 
-  QMap<QTextCursor, YamlTagDirective *> tags() const;
-  void setTags(const QMap<QTextCursor, YamlTagDirective *> &tags);
-  void addTag(QTextCursor position, YamlTagDirective *tag);
+  QMap<QTextCursor, YamlTagDirective*> tags() const;
+  void setTags(const QMap<QTextCursor, YamlTagDirective*>& tags);
+  void addTag(YamlTagDirective* tag);
+  bool hasTag();
   void removeTag(QTextCursor position);
 
-  YamlDirective *getDirective() const;
-  void setDirective(YamlDirective *directive);
+  YamlDirective* getDirective() const;
+  bool hasDirective();
+  void setDirective(YamlDirective* directive);
 
 private:
-  YamlDirective *m_directive = nullptr;
+  YamlDirective* m_directive = nullptr;
   //  QTextCursor
   //      m_versionStart;  //!< the start position of '%YAML 1.n' YAML directive
   //  int m_versionLength; //!< the length of the directive string
   bool m_implicitVersion =
-      true; //!< true if the directive string is NOT in document.
-            //  int m_majorVersion = 1; //!< the major version number, default 1
-            //  int m_minorVersion = 2; //!< the minor version number, default 2
+    true; //!< true if the directive string is NOT in document.
+          //  int m_majorVersion = 1; //!< the major version number, default 1
+          //  int m_minorVersion = 2; //!< the minor version number, default 2
 
   bool m_implicitStart = true; //!< true if '---' is NOT in document
   bool m_implicitEnd = true;   //!< true if '...' is not in document
@@ -172,15 +179,15 @@ private:
   QTextCursor m_start;
   QTextCursor m_end;
   // holds ROOT layer of data
-  QList<YamlNode *> m_data;
+  QList<YamlNode*> m_data;
   // holds a map position => node* of ALL nodes.
-  QMap<QTextCursor, YamlNode *> m_nodes;
-  QMap<QTextCursor, YamlTagDirective *> m_tags;
+  QMap<QTextCursor, YamlNode*> m_nodes;
+  QMap<QTextCursor, YamlTagDirective*> m_tags;
 
   YamlErrors m_errors;
   YamlWarnings m_warnings;
 
-  bool addSequenceData(YamlSequence *sequence, YamlMapItem *item = nullptr);
-  bool addMapData(YamlMap *map, YamlMapItem *item = nullptr);
-  bool addMapItemData(YamlMapItem *item);
+  bool addSequenceData(YamlSequence* sequence, YamlMapItem* item = nullptr);
+  bool addMapData(YamlMap* map, YamlMapItem* item = nullptr);
+  bool addMapItemData(YamlMapItem* item);
 };

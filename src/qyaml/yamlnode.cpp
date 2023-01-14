@@ -189,15 +189,20 @@ void YamlScalar::setData(const QString &data) {
   m_data = data.trimmed();
   if (m_data.startsWith(Characters::QUOTATION) &&
       m_data.endsWith(Characters::QUOTATION))
-    m_style = DOUBLE_QUOTED;
+    m_style = DOUBLEQUOTED;
   else if (m_data.startsWith(Characters::SINGLEQUOTE) &&
            m_data.endsWith(Characters::SINGLEQUOTE))
-    m_style = SINGLE_QUOTED;
+    m_style = SINGLEQUOTED;
   else
     m_style = PLAIN;
 }
 
 YamlScalar::Style YamlScalar::style() const { return m_style; }
+
+void YamlScalar::setStyle(Style style)
+{
+  m_style = style;
+}
 
 int YamlScalar::length() const { return m_data.length(); }
 
