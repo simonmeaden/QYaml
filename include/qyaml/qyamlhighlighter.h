@@ -79,6 +79,7 @@ private:
   QColor m_commentColor;
   QColor m_docStartColor;
   QColor m_docEndColor;
+  QColor m_errorColor;
 
   QTextCharFormat m_textFormat;
   QTextCharFormat m_mapFormat;

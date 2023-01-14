@@ -674,34 +674,45 @@ QYamlParser::parseComment(int& i, const QString& text)
 YamlScalar*
 QYamlParser::parseScalar(const QString& t, int i)
 {
-  auto tr = t.trimmed();
-  auto start = i - tr.length();
-  auto scalar = new YamlScalar(tr, this);
+  auto trimmed = t.trimmed();
+  auto start = i - trimmed.length();
+  auto scalar = new YamlScalar(trimmed, this);
   scalar->setStart(createCursor(start));
   scalar->setEnd(createCursor(i));
-  auto firstChar = tr.first(1);
+  auto firstChar = trimmed.first(1);
   if (firstChar == Characters::AMPERSAND ||
       firstChar == Characters::EXCLAMATIONMARK ||
       firstChar == Characters::ASTERISK ||
-      firstChar == Characters::OPEN_CURLY_BRACKET ||
-      firstChar == Characters::CLOSE_CURLY_BRACKET ||
-      firstChar == Characters::OPEN_SQUARE_BRACKET ||
-      firstChar == Characters::CLOSE_SQUARE_BRACKET ||
-      firstChar == Characters::COMMA ||
-      firstChar == Characters::VERTICAL_LINE ||
-      firstChar == Characters::GT ||
+      firstChar == Characters::VERTICAL_LINE || firstChar == Characters::GT ||
       firstChar == Characters::COMMERCIAL_AT ||
-      firstChar == Characters::BACKTICK) {
+      firstChar == Characters::BACKTICK || firstChar == Characters::HASH) {
     scalar->setError(YamlError::IllegalFirstCharacter, true);
-  } else if (firstChar == Characters::HASH) {
-    // TODO distinguish from comment??
-  }else if (firstChar == Characters::DOUBLEQUOTE) {
-    if (tr.endsWith(Characters::DOUBLEQUOTE)) {
+  } else if (firstChar == Characters::OPEN_CURLY_BRACKET) {
+    // TODO distinguish from start map??
+    qWarning();
+  } else if (firstChar == Characters::OPEN_SQUARE_BRACKET) {
+    // TODO distinguish from start sequence??
+    qWarning();
+  } else if (firstChar == Characters::CLOSE_CURLY_BRACKET) {
+    // TODO distinguish from start map??
+    qWarning();
+  } else if (firstChar == Characters::CLOSE_SQUARE_BRACKET) {
+    // TODO distinguish from start sequence??
+    qWarning();
+  } else if (firstChar == Characters::COMMA) {
+    // TODO distinguish from extra comma??
+    qWarning();
+  } else if (firstChar == Characters::DOUBLEQUOTE) {
+    if (trimmed.endsWith(Characters::DOUBLEQUOTE)) {
       scalar->setStyle(YamlScalar::DOUBLEQUOTED);
+    } else {
+      scalar->setError(YamlError::IllegalFirstCharacter, true);
     }
- }else if (firstChar == Characters::SINGLEQUOTE) {
-    if (tr.endsWith(Characters::SINGLEQUOTE)) {
+  } else if (firstChar == Characters::SINGLEQUOTE) {
+    if (trimmed.endsWith(Characters::SINGLEQUOTE)) {
       scalar->setStyle(YamlScalar::SINGLEQUOTED);
+    } else {
+      scalar->setError(YamlError::IllegalFirstCharacter, true);
     }
   }
   return scalar;
