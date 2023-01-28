@@ -74,6 +74,7 @@ QYamlDocument::setStart(QTextCursor position, YamlStart* start)
   m_start = position;
   m_implicitStart = false;
   if (start) {
+    m_data.append(start);
     m_nodes.insert(start->start(), start);
   }
 }
@@ -101,6 +102,7 @@ QYamlDocument::setEnd(QTextCursor mark, YamlEnd* end)
 {
   if (end) {
     m_end = end->end();
+    m_data.append(end);
     m_nodes.insert(end->start(), end);
   } else {
     m_end = mark;
@@ -145,35 +147,48 @@ QYamlDocument::setExplicitTags(bool ExplicitTags)
 }
 
 QList<YamlNode*>
-QYamlDocument::data() const
+QYamlDocument::nodes() const
 {
   return m_data;
 }
 
 YamlNode*
-QYamlDocument::data(int index)
+QYamlDocument::node(int index)
 {
   return m_data.at(index);
 }
 
+YamlNode *QYamlDocument::node(QTextCursor cursor)
+{
+  return m_nodes.value(cursor, nullptr);
+}
+
 bool
-QYamlDocument::addData(YamlNode* data)
+QYamlDocument::addNode(YamlNode* data, bool root)
 {
   switch (data->type()) {
     case YamlNode::Comment:
       m_data.append(data);
+      if (root)
+        m_root.append(data);
       m_nodes.insert(data->start(), data);
       return true;
     case YamlNode::Scalar:
       m_data.append(data);
+      if (root)
+        m_root.append(data);
       m_nodes.insert(data->start(), data);
       return true;
     case YamlNode::Sequence: {
       m_data.append(data);
+      if (root)
+        m_root.append(data);
       return addSequenceData(qobject_cast<YamlSequence*>(data));
     }
     case YamlNode::Map: {
       m_data.append(data);
+      if (root)
+        m_root.append(data);
       return addMapData(qobject_cast<YamlMap*>(data));
     }
     default:
@@ -190,21 +205,24 @@ QYamlDocument::addSequenceData(YamlSequence* sequence, YamlMapItem* item)
     m_nodes.insert(sequence->start(), sequence);
 
   for (auto data : sequence->data()) {
-    switch (data->type()) {
-      case YamlNode::Comment:
-        //        m_nodes.insert(data->start(), data);
-        break;
-      case YamlNode::Scalar:
-        m_nodes.insert(data->start(), data);
-        break;
-      case YamlNode::Sequence:
-        addSequenceData(qobject_cast<YamlSequence*>(data));
-        break;
-      case YamlNode::Map:
-        addMapData(qobject_cast<YamlMap*>(data));
-        break;
-      default:
-        return false; // should only happen on error.
+    if (data){
+      switch (data->type()) {
+        case YamlNode::Comment:
+          //        m_nodes.insert(data->start(), data);
+          break;
+        case YamlNode::Scalar:
+          m_data.append(data);
+          m_nodes.insert(data->start(), data);
+          break;
+        case YamlNode::Sequence:
+          addSequenceData(qobject_cast<YamlSequence*>(data));
+          break;
+        case YamlNode::Map:
+          addMapData(qobject_cast<YamlMap*>(data));
+          break;
+        default:
+          return false; // should only happen on error.
+      }
     }
   }
   return false;
@@ -228,6 +246,7 @@ QYamlDocument::addMapData(YamlMap* map, YamlMapItem* item)
           //          m_nodes.insert(data->start(), data);
           break;
         case YamlNode::Scalar:
+          m_data.append(data);
           m_nodes.insert(data->start(), i);
           break;
         case YamlNode::Sequence: {
@@ -263,6 +282,7 @@ QYamlDocument::addMapItemData(YamlMapItem* item)
           //          m_nodes.insert(data->start(), data);
           return true;
         case YamlNode::Scalar:
+          m_data.append(data);
           m_nodes.insert(item->start(), item);
           return true;
         case YamlNode::Sequence: {
@@ -316,7 +336,7 @@ QYamlDocument::setWarnings(const YamlWarnings& newWarnings)
 }
 
 const QMap<QTextCursor, YamlNode*>&
-QYamlDocument::nodes() const
+QYamlDocument::nodeMap() const
 {
   return m_nodes;
 }
@@ -332,6 +352,7 @@ QYamlDocument::setTags(const QMap<QTextCursor, YamlTagDirective*>& tags)
 {
   m_tags = tags;
   for (auto [key, tag] : asKeyValueRange(tags)) {
+    m_data.append(tag);
     m_nodes.insert(key, tag);
   }
 }
@@ -340,6 +361,8 @@ void
 QYamlDocument::addTag(YamlTagDirective* tag)
 {
   m_tags.insert(tag->start(), tag);
+  m_root.append(tag);
+  m_data.append(tag);
   m_nodes.insert(tag->start(), tag);
 }
 
@@ -371,6 +394,8 @@ void
 QYamlDocument::setDirective(YamlDirective* directive)
 {
   this->m_directive = directive;
+  m_root.append(directive);
+  m_data.append(directive);
   m_nodes.insert(directive->start(), m_directive);
 }
 

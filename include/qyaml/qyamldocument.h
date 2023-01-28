@@ -117,24 +117,45 @@ public:
   bool getExplicitTags() const;
   void setExplicitTags(bool ExplicitTags);
 
-  //! Returns the yaml root node list.
-  QList<YamlNode*> data() const;
+  //! Returns the ordered list of yaml nodes.
+  //!
+  //! To return the map of QTextCursor->Node then use the nodeMap() method.
+  QList<YamlNode*> nodes() const;
+
+  //! Returns the map of QTextCursor->Node.
+  //!
+  //! To return the ordered node list use the nodes() method.
+  const QMap<QTextCursor, YamlNode*>& nodeMap() const;
 
   //! Returns the yaml root node item at index.
-  YamlNode* data(int index);
+  YamlNode* node(int index);
+
+  //! Returns the yaml root node item at the cursor.
+  YamlNode* node(QTextCursor cursor);
 
   //! Adds a YamlNode* to the document and returns true if successful, otherwise
   //! returns false.
   //!
   //! Only scalars, maps and sequences can be added to the document. Other
   //! types are internal sub types of these types.
-  bool addData(YamlNode* Data);
+  bool addNode(YamlNode* Data, bool root = false);
+
+  QMap<QTextCursor, YamlTagDirective*> tags() const;
+  void setTags(const QMap<QTextCursor, YamlTagDirective*>& tags);
+  void addTag(YamlTagDirective* tag);
+  bool hasTag();
+  void removeTag(QTextCursor position);
+
+  YamlDirective* getDirective() const;
+  bool hasDirective();
+  void setDirective(YamlDirective* directive);
+
 
   //! returns the list of document errors.
   const YamlErrors& errors() const;
 
   //! Sets/clears an error for the document
-  void setError(const YamlError& error, bool set);
+  void setError(const YamlError &error, bool set);
 
   //! Sets a number of errors for the document
   void setErrors(const YamlErrors& newErrors);
@@ -146,20 +167,7 @@ public:
   void setWarning(const YamlWarning& warning, bool set);
 
   //! Sets a number of warnings for the document#include "qyaml/yamlnode.h"
-
   void setWarnings(const YamlWarnings& newWarnings);
-
-  const QMap<QTextCursor, YamlNode*>& nodes() const;
-
-  QMap<QTextCursor, YamlTagDirective*> tags() const;
-  void setTags(const QMap<QTextCursor, YamlTagDirective*>& tags);
-  void addTag(YamlTagDirective* tag);
-  bool hasTag();
-  void removeTag(QTextCursor position);
-
-  YamlDirective* getDirective() const;
-  bool hasDirective();
-  void setDirective(YamlDirective* directive);
 
 private:
   YamlDirective* m_directive = nullptr;
@@ -178,7 +186,9 @@ private:
 
   QTextCursor m_start;
   QTextCursor m_end;
-  // holds ROOT layer of data
+  // holds ordered ROOT list of data
+  QList<YamlNode*> m_root;
+  // holds ordered list of all nodes in document
   QList<YamlNode*> m_data;
   // holds a map position => node* of ALL nodes.
   QMap<QTextCursor, YamlNode*> m_nodes;

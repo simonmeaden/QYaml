@@ -4,6 +4,7 @@
 #include "qyaml/qyamlparser.h"
 #include "qyaml/yamlnode.h"
 #include "utilities/x11colors.h"
+#include "utilities/ContainerUtil.h"
 
 QYamlHighlighter::QYamlHighlighter(QYamlParser* parser, QYamlEdit* parent)
   : QSyntaxHighlighter{ parent->document() }
@@ -22,6 +23,7 @@ QYamlHighlighter::QYamlHighlighter(QYamlParser* parser, QYamlEdit* parent)
   , m_docStartColor(QColorConstants::X11::MediumBlue)
   , m_docEndColor(QColorConstants::X11::MediumBlue)
   , m_errorColor(QColorConstants::X11::red)
+  , m_warningColor(QColorConstants::X11::yellow)
 {
   m_textFormat.setBackground(m_backgroundColor);
   m_textFormat.setForeground(m_textColor);
@@ -89,6 +91,11 @@ QYamlHighlighter::highlightBlock(const QString& text)
 
       switch (node->type()) {
         case YamlNode::Scalar: {
+//          if (node->hasErrors() &&
+//              node->errors().testFlag(YamlError::EmptyFlowValue)) {
+//            setScalarFormat(node, blockStart, text.length());
+//            continue;
+//          }
           setScalarFormat(node, blockStart, text.length());
           break;
         }
@@ -152,6 +159,23 @@ QYamlHighlighter::setScalarFormat(YamlNode* node,
         setFormat(formatable.start, formatable.length, m_scalarFormat);
         m_scalarFormat.setUnderlineStyle(QTextCharFormat::NoUnderline);
         m_scalarFormat.setUnderlineColor(m_backgroundColor);
+      } else if (n->errors().testFlag(EmptyFlowValue)) {
+        m_scalarFormat.setUnderlineColor(m_errorColor);
+        m_scalarFormat.setUnderlineStyle(QTextCharFormat::WaveUnderline);
+        setFormat(formatable.start, 1, m_scalarFormat);
+        m_scalarFormat.setUnderlineStyle(QTextCharFormat::NoUnderline);
+        m_scalarFormat.setUnderlineColor(m_backgroundColor);
+      } else if (n->hasDodgyChar()) {
+        auto dodgy = n->dodgyChars();
+        setFormat(formatable.start, formatable.length, m_scalarFormat);
+        for (auto [key, warning] : asKeyValueRange(dodgy)) {
+          auto start = key.position() - blockStart;
+          m_scalarFormat.setUnderlineColor(m_warningColor);
+          m_scalarFormat.setUnderlineStyle(QTextCharFormat::WaveUnderline);
+          setFormat(start, 1, m_scalarFormat);
+          m_scalarFormat.setUnderlineStyle(QTextCharFormat::NoUnderline);
+          m_scalarFormat.setUnderlineColor(m_backgroundColor);
+        }
       } else
         setFormat(formatable.start, formatable.length, m_scalarFormat);
     }
@@ -339,25 +363,27 @@ QYamlHighlighter::setSequenceFormat(YamlNode* node,
         break;
     }
     for (auto child : n->data()) {
-      switch (child->type()) {
-        case YamlNode::Scalar: {
-          setScalarFormat(n, blockStart, textLength);
-          break;
+      if (child) {
+        switch (child->type()) {
+          case YamlNode::Scalar: {
+            setScalarFormat(n, blockStart, textLength);
+            break;
+          }
+          case YamlNode::Map: {
+            setMapFormat(child, blockStart, textLength);
+            break;
+          }
+          case YamlNode::Sequence: {
+            setSequenceFormat(child, blockStart, textLength);
+            break;
+          }
+          case YamlNode::Comment: {
+            setCommentFormat(node, blockStart, textLength);
+            break;
+          }
+          default:
+            break;
         }
-        case YamlNode::Map: {
-          setMapFormat(child, blockStart, textLength);
-          break;
-        }
-        case YamlNode::Sequence: {
-          setSequenceFormat(child, blockStart, textLength);
-          break;
-        }
-        case YamlNode::Comment: {
-          setCommentFormat(node, blockStart, textLength);
-          break;
-        }
-        default:
-          break;
       }
     }
   }
@@ -378,14 +404,14 @@ QYamlHighlighter::isFormatable(int nodeStart,
     return false;
 
   if (nodeStart < blockStart)
-    result.start = blockStart;
+    result.start = 0;
   else {
     result.start = nodeStart - blockStart;
     result.start = (result.start < 0 ? 0 : result.start);
   }
 
   if (end > textend)
-    result.length = blockStart + textLength - nodeStart;
+    result.length = textLength;
   else
     result.length = nodeLength;
 
@@ -534,4 +560,24 @@ void
 QYamlHighlighter::setTagColor(const QColor& tagColor)
 {
   m_tagColor = tagColor;
+}
+
+QColor QYamlHighlighter::warningColor() const
+{
+  return m_warningColor;
+}
+
+void QYamlHighlighter::setWarningColor(const QColor &warningColor)
+{
+  m_warningColor = warningColor;
+}
+
+QColor QYamlHighlighter::errorColor() const
+{
+  return m_errorColor;
+}
+
+void QYamlHighlighter::setErrorColor(const QColor &errorColor)
+{
+  m_errorColor = errorColor;
 }

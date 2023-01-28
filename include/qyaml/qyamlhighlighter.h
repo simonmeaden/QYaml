@@ -60,6 +60,12 @@ public:
   QColor docEndColor() const;
   void setDocEndColor(const QColor &docEndColor);
 
+  QColor errorColor() const;
+  void setErrorColor(const QColor &errorColor);
+
+  QColor warningColor() const;
+  void setWarningColor(const QColor &warningColor);
+
 protected:
 private:
   // QSyntaxHighlighter interface
@@ -80,6 +86,7 @@ private:
   QColor m_docStartColor;
   QColor m_docEndColor;
   QColor m_errorColor;
+  QColor m_warningColor;
 
   QTextCharFormat m_textFormat;
   QTextCharFormat m_mapFormat;

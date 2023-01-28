@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(${PROJECT_NAME} "")
-add_library(QYaml::QYaml ALIAS ${PROJECT_NAME})
+add_library(QYaml::QYaml ALIAS QYaml)
 
 if (USE_QT_VERSION EQUAL 5)
     message("QT5")
@@ -76,7 +76,7 @@ else()
 endif()
 
 target_include_directories(${PROJECT_NAME}
-    PUBLIC 
+    PUBLIC
         include
 #        $<INSTALL_INTERFACE:include>
 #        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -85,7 +85,7 @@ target_include_directories(${PROJECT_NAME}
 )
 
 target_compile_options(${PROJECT_NAME}
-    PRIVATE 
+    PRIVATE
         -Werror
 )
 
@@ -117,7 +117,7 @@ target_sources(
 )
 
 target_compile_features(${PROJECT_NAME}
-    PRIVATE 
+    PRIVATE
         cxx_std_17
 )
 
@@ -134,6 +134,7 @@ target_link_libraries(${PROJECT_NAME}
         QuaZip::QuaZip
         Utilities::Utilities
         QLNPlainText::QLNPlainText
+        QMarkdown::QMarkdown
         yaml-cpp
 )
 

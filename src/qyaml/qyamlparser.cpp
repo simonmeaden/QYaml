@@ -1,7 +1,7 @@
 #include "qyaml/qyamlparser.h"
 #include "qyaml/qyamldocument.h"
-// #include "utilities/ContainerUtil.h"
-#include "utilities/characters.h"
+#include "qyaml/yamlnode.h"
+#include "utilities/ContainerUtil.h"
 
 #include <JlCompress.h>
 
@@ -79,6 +79,8 @@ QYamlParser::parse(const QString& text, int startPos, int length)
 {
   m_text = text;
 
+  c_printable(Characters::NW_ARROW_BAR);
+
   auto row = 0;
   auto start = startPos;
   QString t;
@@ -95,6 +97,7 @@ QYamlParser::parse(const QString& text, int startPos, int length)
   //  QTextCursor cursor;
   auto hasYamlDirective = false;
   QList<YamlNode*> nodes;
+  QList<YamlNode*> rootNodes;
   QString key;
   int keyStart = -1;
 
@@ -116,139 +119,53 @@ QYamlParser::parse(const QString& text, int startPos, int length)
       }
       t += c;
       continue;
-    } else if (c == Characters::PERCENT) {
+    } else if (c_directive(c)) {
       int start = i;
-      t = c;
-      if (!getNextChar(c, text, i)) {
-        i = start + 1;
-        // TODO NOT A YAML DIRECTIVE carry on with something else.
-        continue;
-      } else if (c == 'Y') {
-        t += c;
-        if (!getNextChar(c, text, i)) {
-          i = start + 1;
-          // TODO NOT A YAML DIRECTIVE carry on with something else.
-          continue;
-        } else if (c == 'A') {
-          t += c;
-          if (!getNextChar(c, text, i)) {
-            i = start + 1;
-            // TODO NOT A YAML DIRECTIVE carry on with something else.
-            continue;
-          } else if (c == 'M') {
-            t += c;
-            if (!getNextChar(c, text, i)) {
-              i = start + 1;
-              // TODO NOT A YAML DIRECTIVE carry on with something else.
-              continue;
-            } else if (c == 'L') {
-              t += c;
-              if (!getNextChar(c, text, i)) {
-                i = start + 1;
-                // TODO NOT A YAML DIRECTIVE carry on with something else.
-                continue;
-              } else {
-                while (c.isSpace()) {
-                  t += c;
-                  if (!getNextChar(c, text, i)) {
-                    // TODO NOT A YAML DIRECTIVE carry on with something
-                    // else.
-                    continue;
-                  }
-                }
-
-                if (c.isDigit()) {
-                  auto major = c.digitValue();
-                  if (major == VERSION_MAJOR) {
-                    t += c;
-                    if (!getNextChar(c, text, i)) {
-                      i = start + 1;
-                      // TODO NOT A YAML DIRECTIVE carry on with something
-                      // else.
-                      continue;
-                    } else if (c == Characters::STOP) {
-                      t += c;
-                      if (!getNextChar(c, text, i)) {
-                        i = start + 1;
-                        // TODO NOT A YAML DIRECTIVE carry on with
-                        // something else.
-                        continue;
-                      } else if (c.isDigit()) {
-                        auto minor = c.digitValue();
-                        if (minor >= 0 && minor <= VERSION_MINOR) {
-                          t += c;
-                          auto directive =
-                            new YamlDirective(major, minor, this);
-                          directive->setStart(createCursor(start));
-                          directive->setEnd(createCursor(start + t.length()));
-                          //                          doc->setDirective(directive);
-                          //                          // reposition the document
-                          //                          start to the YAML
-                          //                          // directive.
-                          //                          if (!doc->hasDirective())
-                          //                          {
-                          //                            doc->setStart(directive->start());
-                          //                          }
-                          nodes.append(directive);
-                          t.clear();
-                          continue;
-                        } else {
-                          // TODO error version number;
-                        }
-                      }
-                    }
-                  }
-                }
-              }
+      auto tag = lookahead(i, text);
+      if (tag.startsWith("%YAML ")) {
+        auto s = tag.mid(5).trimmed();
+        auto splits = s.split(Characters::STOP, Qt::SkipEmptyParts);
+        if (splits.size() == 2) {
+          bool majorOk, minorOk;
+          auto major = splits[0].toInt(&majorOk);
+          auto minor = splits[1].toInt(&minorOk);
+          auto directive = new YamlDirective(major, minor, this);
+          if (!majorOk) {
+            // for future expansion ?
+            if (major < MIN_VERSION_MAJOR || major > MAX_VERSION_MAJOR) {
+              directive->setError(YamlError::InvalidMajorVersion, true);
             }
           }
-        }
-      } else if (c == 'T') {
-        t += c;
-        if (!getNextChar(c, text, i)) {
-          i = start + 1;
-          // TODO NOT A YAML DIRECTIVE carry on with something else.
-          continue;
-        } else if (c == 'A') {
-          t += c;
-          if (!getNextChar(c, text, i)) {
-            i = start + 1;
-            // TODO NOT A YAML DIRECTIVE carry on with something else.
-            continue;
-          } else if (c == 'G') {
-            t += c;
-            if (!getNextChar(c, text, i)) {
-              // TODO NOT A YAML DIRECTIVE carry on with something
-              // else.
-              continue;
-            } else {
-              while (c != Characters::NEWLINE) {
-                t += c;
-                if (!getNextChar(c, text, i)) {
-                  // TODO NOT A TAG DIRECTIVE carry on with something
-                  // else.
-                  continue;
-                }
-              }
-              auto directive = new YamlTagDirective(t, this);
-              directive->setStart(createCursor(start));
-              directive->setEnd(createCursor(start + t.length()));
-              //              doc->addTag(directive->start(), directive);
-              //              // reposition doc start if no YAML directive has
-              //              been set
-              //              // and if no tag has been already set.
-              //              if (!doc->hasDirective() && !doc->hasTag()) {
-              //                doc->setStart(directive->start());
-              //              }
-              nodes.append(directive);
-              t.clear();
-              continue;
+          if (!minorOk) {
+            if (minor < MIN_VERSION_MINOR || minor > MAX_VERSION_MAJOR) {
+              directive->setError(YamlError::InvalidMinorVersion, true);
             }
           }
+          directive->setStart(createCursor(start));
+          directive->setEnd(createCursor(i));
+          nodes.append(directive);
+          rootNodes.append(directive);
         }
+      } else if (tag.startsWith("%TAG ")) {
+        auto directive = ns_tag_directive(tag, start);
+        //        auto directive = new YamlTagDirective(t, this);
+        //        QRegularExpression re("[!][^!]*[!]");
+        //        auto match = re.match(s);
+        //        if (match.hasMatch()) {
+        //          auto tagid = match.captured(0);
+        //          auto len = match.capturedLength(0);
+        //          directive->setId(tagid.mid(1, len - 2));
+        //          s = s.mid(len).trimmed();
+        //          directive->setValue(s);
+        //        }
+        //        directive->setStart(createCursor(start));
+        //        directive->setEnd(createCursor(start + t.length()));
+        nodes.append(directive);
+        rootNodes.append(directive);
       }
     } else if (c == Characters::MINUS) {
       auto start = i;
+
       t += c;
       if (!getNextChar(c, text, i)) {
         // TODO NOT A TAG DIRECTIVE carry on with something
@@ -270,6 +187,7 @@ QYamlParser::parse(const QString& text, int startPos, int length)
             //            doc->setStart(startNode->start());
             //          }
             nodes.append(startNode);
+            rootNodes.append(startNode);
           } else {
             // TODO this will be inside a scalar string
             continue;
@@ -300,6 +218,7 @@ QYamlParser::parse(const QString& text, int startPos, int length)
             //            doc->setEnd(endNode->end());
             //          }
             nodes.append(endNode);
+            rootNodes.append(endNode);
           } else {
             // TODO this will be inside a scalar string
             continue;
@@ -325,6 +244,7 @@ QYamlParser::parse(const QString& text, int startPos, int length)
       parseFlowMap(map, ++i, text);
       //      doc->addData(map);
       nodes.append(map);
+      rootNodes.append(map);
     } else if (c == Characters::CLOSE_CURLY_BRACKET) { // end map flow
       // should happen in parseFlowMap
       // TODO error ?
@@ -336,6 +256,7 @@ QYamlParser::parse(const QString& text, int startPos, int length)
       parseFlowSequence(sequence, ++i, text);
       //      doc->addData(sequence);
       nodes.append(sequence);
+      rootNodes.append(sequence);
     } else if (c == Characters::CLOSE_SQUARE_BRACKET) { // end sequence flow
       // should happen in parseFlowSequence.
       // TODO error ?
@@ -367,7 +288,7 @@ QYamlParser::parse(const QString& text, int startPos, int length)
   }
 
   // build the documents.
-  buildDocuments(text, nodes);
+  buildDocuments(text, nodes, rootNodes);
 
   if (resolveAnchors()) {
     // TODO errors
@@ -379,7 +300,9 @@ QYamlParser::parse(const QString& text, int startPos, int length)
 }
 
 void
-QYamlParser::buildDocuments(const QString& text, QList<YamlNode*> nodes)
+QYamlParser::buildDocuments(const QString& text,
+                            QList<YamlNode*> nodes,
+                            QList<YamlNode*> rootNodes)
 {
   QYamlDocument* doc = nullptr;
   auto docStarted = false;
@@ -452,7 +375,7 @@ QYamlParser::buildDocuments(const QString& text, QList<YamlNode*> nodes)
           // TODO error??
         } else if (!(type == YamlNode::YamlDirective ||
                      type == YamlNode::TagDirective)) {
-          doc->addData(node);
+          doc->addNode(node, rootNodes.contains(node));
         }
       }
       continue;
@@ -474,7 +397,7 @@ QYamlParser::buildDocuments(const QString& text, QList<YamlNode*> nodes)
       } else if (!(type == YamlNode::YamlDirective ||
                    type == YamlNode::TagDirective || type == YamlNode::Start ||
                    type == YamlNode::End)) {
-        doc->addData(node);
+        doc->addNode(node, rootNodes.contains(node));
       }
     }
   }
@@ -493,21 +416,15 @@ QYamlParser::parseFlowSequence(YamlSequence* sequence,
 
   while (i < text.length()) {
     auto c = text.at(i);
-    if (c == Characters::NEWLINE) {
-      qWarning();
-    } else if (c == Characters::COMMA) {
-      if (!t.isEmpty()) {
-        auto scalar = parseScalar(t, i);
+    if (c == Characters::COMMA) {
+      if (t.trimmed().isEmpty()) {
+        auto scalar = parseFlowScalar(t, i);
         sequence->append(scalar);
         t.clear();
-      }
-    } else if (c == Characters::MINUS) {
-      i++;
-      if (i < text.size()) {
-        c = text.at(i);
-        if (c.isSpace()) {
-          // must be a BLOCK SEQUENCE if followed by a space
-        }
+      } else {
+        auto scalar = parseFlowScalar(t, i);
+        sequence->append(scalar);
+        t.clear();
       }
     } else if (c == Characters::OPEN_CURLY_BRACKET) { // start map flow
       auto subMap = new YamlMap(this);
@@ -529,7 +446,7 @@ QYamlParser::parseFlowSequence(YamlSequence* sequence,
     } else if (c == Characters::CLOSE_SQUARE_BRACKET) { // end sequence flow
       sequence->setEnd(createCursor(i));
       if (!t.isEmpty()) { // only if missing final comma
-        auto scalar = parseScalar(t, i);
+        auto scalar = parseFlowScalar(t, i);
         sequence->append(scalar);
         t.clear();
       }
@@ -582,7 +499,7 @@ QYamlParser::parseFlowMap(YamlMap* map, int& i, const QString& text)
     } else if (c == Characters::COMMA) {
       // TODO maps & sequences at comma
       if (!t.isEmpty() && !key.isEmpty()) {
-        auto scalar = parseScalar(t, i);
+        auto scalar = parseFlowScalar(t, i);
         auto item = new YamlMapItem(key, scalar, this);
         item->setStart(createCursor(keyStart));
         item->setEnd(scalar->end());
@@ -610,7 +527,7 @@ QYamlParser::parseFlowMap(YamlMap* map, int& i, const QString& text)
     } else if (c == Characters::CLOSE_CURLY_BRACKET) { // end map flow
       map->setEnd(createCursor(i));
       if (!t.isEmpty() && !key.isEmpty()) { // only if missing final comma
-        auto scalar = parseScalar(t, i);
+        auto scalar = parseFlowScalar(t, i);
         auto item = new YamlMapItem(key, scalar, this);
         item->setStart(createCursor(keyStart));
         item->setEnd(createCursor(i));
@@ -672,20 +589,76 @@ QYamlParser::parseComment(int& i, const QString& text)
 }
 
 YamlScalar*
-QYamlParser::parseScalar(const QString& t, int i)
+QYamlParser::parseFlowScalar(const QString& text, int i)
 {
+  auto indent = 0, nl = 0;
+  int textlength = text.length();
+  auto t = text;
+  while (t.startsWith(Characters::NEWLINE)) {
+    nl++;
+    t = t.mid(1);
+  }
+  while (t.at(0).isSpace()) {
+    indent++;
+    t = t.mid(1);
+  }
+  //  t = StringUtil::lTrim(t, indent);
   auto trimmed = t.trimmed();
-  auto start = i - trimmed.length();
+
+  auto firstChar = trimmed.at(0);  // TODO to at when working.
+  auto secondChar = trimmed.at(1); // TODO to at when working.
+  auto start = i - textlength + indent + nl;
   auto scalar = new YamlScalar(trimmed, this);
   scalar->setStart(createCursor(start));
   scalar->setEnd(createCursor(i));
-  auto firstChar = trimmed.first(1);
-  if (firstChar == Characters::AMPERSAND ||
-      firstChar == Characters::EXCLAMATIONMARK ||
-      firstChar == Characters::ASTERISK ||
-      firstChar == Characters::VERTICAL_LINE || firstChar == Characters::GT ||
-      firstChar == Characters::COMMERCIAL_AT ||
-      firstChar == Characters::BACKTICK || firstChar == Characters::HASH) {
+
+  auto splits = trimmed.split(Characters::NEWLINE, Qt::KeepEmptyParts);
+  auto count = 0;
+  QMap<int, YamlWarning> warnings;
+  for (auto i = 0; i < splits.size(); i++) {
+    auto s = splits.at(i);
+    if (s.isEmpty()) {
+      warnings.insert(count, YamlWarning::NoWarnings);
+      count++;
+    }
+    if (i <= splits.size() - 1) {
+      if (s.contains(Characters::HASH)) {
+        warnings.insert(count, YamlWarning::PossibleCommentInScalar);
+      } else {
+        warnings.insert(count, YamlWarning::NoWarnings);
+      }
+      count += s.length();
+    }
+  }
+  for (auto [c, t] : asKeyValueRange(warnings)) {
+    if (t == YamlWarning::NoWarnings) {
+      continue;
+    } else if (t == YamlWarning::PossibleCommentInScalar) {
+      if (t != warnings.last()) {
+        int l = trimmed.indexOf(Characters::HASH, c);
+        scalar->addDodgyChar(createCursor(c + l),
+                             YamlWarning::PossibleCommentInScalar);
+      }
+    }
+  }
+
+  auto p = 0;
+  while ((p = t.indexOf(Characters::TAB, p)) != -1) {
+    scalar->addDodgyChar(createCursor(i - textlength + indent + nl + p),
+                         YamlWarning::TabCharsDiscouraged);
+    p++;
+  }
+
+  if ((firstChar == Characters::COLON || firstChar == Characters::HASH) &&
+      secondChar.isSpace()) {
+    scalar->setError(YamlError::IllegalFirstCharacter, true);
+  } else if (firstChar == Characters::AMPERSAND ||
+             firstChar == Characters::EXCLAMATIONMARK ||
+             firstChar == Characters::ASTERISK ||
+             firstChar == Characters::VERTICAL_LINE ||
+             firstChar == Characters::GT ||
+             firstChar == Characters::COMMERCIAL_AT ||
+             firstChar == Characters::BACKTICK) {
     scalar->setError(YamlError::IllegalFirstCharacter, true);
   } else if (firstChar == Characters::OPEN_CURLY_BRACKET) {
     // TODO distinguish from start map??
@@ -707,12 +680,14 @@ QYamlParser::parseScalar(const QString& t, int i)
       scalar->setStyle(YamlScalar::DOUBLEQUOTED);
     } else {
       scalar->setError(YamlError::IllegalFirstCharacter, true);
+      scalar->setError(YamlError::MissingMatchingQuote, true);
     }
   } else if (firstChar == Characters::SINGLEQUOTE) {
     if (trimmed.endsWith(Characters::SINGLEQUOTE)) {
       scalar->setStyle(YamlScalar::SINGLEQUOTED);
     } else {
       scalar->setError(YamlError::IllegalFirstCharacter, true);
+      scalar->setError(YamlError::MissingMatchingQuote, true);
     }
   }
   return scalar;
@@ -778,14 +753,6 @@ QYamlParser::text() const
   return m_text;
 }
 
-// QYamlDocument *QYamlParser::currentDoc() const { return m_currentDoc; }
-
-// const QMap<QTextCursor, YamlNode*>&
-// QYamlParser::nodes() const
-//{
-//   return m_nodes;
-// }
-
 void
 QYamlParser::setDocuments(QList<QYamlDocument*> root)
 {
@@ -804,6 +771,89 @@ QYamlParser::isMultiDocument()
   return (m_documents.size() > 1);
 }
 
+YamlNode*
+QYamlParser::nodeAt(QTextCursor cursor)
+{
+  for (auto doc : m_documents) {
+    for (auto node : doc->nodes()) {
+      YamlNode* n;
+      if ((n = nodeOrRecurse(cursor, node))) {
+        return n;
+      }
+    }
+  }
+  return nullptr;
+}
+
+YamlNode*
+QYamlParser::nodeInSequence(QTextCursor cursor, YamlSequence* seq)
+{
+  if (!seq->data().isEmpty()) {
+    for (auto node : seq->data()) {
+      YamlNode* n;
+      if ((n = nodeOrRecurse(cursor, node))) {
+        return n;
+      }
+    }
+  }
+
+  return seq;
+}
+
+YamlNode*
+QYamlParser::nodeInMap(QTextCursor cursor, YamlMap* map)
+{
+  if (!map->data().isEmpty()) {
+    for (auto node : map->data()) {
+      YamlNode* n;
+      if ((n = nodeOrRecurse(cursor, node))) {
+        return n;
+      }
+      break;
+    }
+  }
+  return map;
+}
+
+YamlNode*
+QYamlParser::nodeOrRecurse(QTextCursor cursor, YamlNode* node)
+{
+  if (cursor >= node->start() && cursor < node->end()) {
+    switch (node->type()) {
+      case YamlNode::Undefined:
+        // should never happen.
+        break;
+      case YamlNode::YamlDirective:
+      case YamlNode::TagDirective:
+      case YamlNode::Start:
+      case YamlNode::End:
+      case YamlNode::MapItem:
+      case YamlNode::Comment:
+        return node;
+      case YamlNode::Scalar:
+        return node;
+      case YamlNode::Sequence:
+        return nodeInSequence(cursor, qobject_cast<YamlSequence*>(node));
+      case YamlNode::Map:
+        return nodeInMap(cursor, qobject_cast<YamlMap*>(node));
+    }
+  }
+  return nullptr;
+}
+
+QString
+QYamlParser::lookahead(int& index, const QString& text, QChar endof)
+{
+  auto c = text.at(index);
+  QString result;
+  while (c != endof) {
+    index++;
+    result += c;
+    c = text.at(index);
+  }
+  return result;
+}
+
 bool
 QYamlParser::isEmpty()
 {
@@ -814,6 +864,579 @@ int
 QYamlParser::count()
 {
   return m_documents.size();
+}
+
+bool
+QYamlParser::c_indicator(QChar c)
+{
+  return (c_sequence_entry(c) || c_mapping_key(c) || c_mapping_value(c) ||
+          c_collect_entry(c) || c_sequence_start(c) || c_sequence_end(c) ||
+          c_mapping_start(c) || c_mapping_end(c) | c_comment(c) ||
+          c_anchor(c) || c_alias(c) || c_tag(c) || c_literal(c) ||
+          c_folded(c) || c_single_quote(c) || c_double_quote(c) ||
+          c_directive(c) || c_reserved(c));
+}
+
+bool
+QYamlParser::c_flow_indicator(QChar c)
+{
+  return (c_collect_entry(c) || c_sequence_start(c) || c_sequence_end(c) ||
+          c_mapping_start(c) || c_mapping_end(c));
+}
+
+bool
+QYamlParser::c_byte_order_mark(QChar c)
+{
+  if (c == Characters::BYTEORDERMARK)
+    return true;
+  return false;
+}
+
+bool
+QYamlParser::c_sequence_entry(QChar c)
+{
+  return (c == Characters::HYPHEN);
+}
+
+bool
+QYamlParser::c_mapping_key(QChar c)
+{
+  return (c == Characters::QUESTIONMARK);
+}
+
+bool
+QYamlParser::c_mapping_value(QChar c)
+{
+  return (c == Characters::COLON);
+}
+
+bool
+QYamlParser::c_collect_entry(QChar c)
+{
+  return (c == Characters::COMMA);
+}
+
+bool
+QYamlParser::c_sequence_start(QChar c)
+{
+  return (c == Characters::OPEN_SQUARE_BRACKET);
+}
+
+bool
+QYamlParser::c_sequence_end(QChar c)
+{
+  return (c == Characters::CLOSE_SQUARE_BRACKET);
+}
+
+bool
+QYamlParser::c_mapping_start(QChar c)
+{
+  return (c == Characters::OPEN_CURLY_BRACKET);
+}
+
+bool
+QYamlParser::c_mapping_end(QChar c)
+{
+  return (c == Characters::CLOSE_CURLY_BRACKET);
+}
+
+bool
+QYamlParser::c_comment(QChar c)
+{
+  return (c == Characters::HASH);
+}
+
+bool
+QYamlParser::c_anchor(QChar c)
+{
+  return (c == Characters::AMPERSAND);
+}
+
+bool
+QYamlParser::c_alias(QChar c)
+{
+  return (c == Characters::ASTERISK);
+}
+
+bool
+QYamlParser::c_tag(QChar c)
+{
+  return (c == Characters::EXCLAMATIONMARK);
+}
+
+bool
+QYamlParser::c_literal(QChar c)
+{
+  return (c == Characters::VERTICAL_LINE);
+}
+
+bool
+QYamlParser::c_folded(QChar c)
+{
+  return (c == Characters::GT);
+}
+
+bool
+QYamlParser::c_single_quote(QChar c)
+{
+  return (c == Characters::SINGLEQUOTE);
+}
+
+bool
+QYamlParser::c_double_quote(QChar c)
+{
+  return (c == Characters::DOUBLEQUOTE);
+}
+
+bool
+QYamlParser::c_directive(QChar c)
+{
+  return (c == Characters::PERCENT);
+}
+
+bool
+QYamlParser::c_reserved(QChar c)
+{
+  return (c == Characters::COMMERCIAL_AT || c == Characters::BACKTICK);
+}
+
+bool
+QYamlParser::b_line_feed(QChar c)
+{
+  return (c == Characters::LF);
+}
+
+bool
+QYamlParser::b_carriage_return(QChar c)
+{
+  return (c == Characters::CR);
+}
+
+bool
+QYamlParser::b_char(QChar c, int version)
+{
+  if (version == 11)
+    if (b_line_feed(c) || b_carriage_return(c) || c == Characters::NEXTLINE ||
+        c == Characters::LINESEPERATOR || c == Characters::PARASEPERATOR)
+      return true;
+  if (version == 12)
+    return (b_line_feed(c) || b_carriage_return(c));
+  return false;
+}
+
+bool
+QYamlParser::nb_char(QChar c, int version)
+{
+  return (c_printable(c) && !(b_char(c, version) || c_byte_order_mark(c)));
+}
+
+bool
+QYamlParser::s_space(QChar c)
+{
+  return (c == Characters::SPACE);
+}
+
+bool
+QYamlParser::s_tab(QChar c)
+{
+  return (c == Characters::TAB);
+}
+
+bool
+QYamlParser::s_white(QChar c)
+{
+  return (s_space(c) || s_tab(c));
+}
+
+bool
+QYamlParser::ns_char(QChar c)
+{
+  return (nb_char(c, MAX_VERSION) && !s_white(c));
+}
+
+bool
+QYamlParser::b_break(QChar c1, QChar c2)
+{
+  return (b_carriage_return(c1) && b_line_feed(c2));
+}
+
+bool
+QYamlParser::b_break(QChar c)
+{
+  return (b_carriage_return(c) || b_line_feed(c));
+}
+
+bool
+QYamlParser::b_as_line_feed(QChar& c)
+{
+  if (b_break(c)) {
+    c = Characters::LF;
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::b_as_line_feed(QChar& c1, QChar& c2)
+{
+  if (b_break(c1, c2)) {
+    c1 = Characters::LF;
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::b_non_content(QChar& c)
+{
+  return b_break(c);
+}
+
+bool
+QYamlParser::c_printable(QChar c)
+{
+  if (c.isPrint())
+    return true;
+
+  auto lower = c.cell();
+  auto higher = c.row();
+
+  if (c == Characters::HORIZONTALTABSYMBOL)
+    return true;
+  else if (nb_char(c, MAX_VERSION))
+    return true;
+  else if (lower >= 0x20 && lower <= 0x7E)
+    return true;
+  else if (lower == 0x85)
+    return true;
+  else if ((lower >= 0xA0 && lower <= 0xFF) && higher == 0)
+    return true;
+  else if (higher >= 0x00 && higher <= 0xD7)
+    return true;
+  return false;
+}
+
+bool
+QYamlParser::ns_dec_digit(QChar c)
+{
+  // YAML ns-dec-digit
+  return (c.isDigit());
+}
+
+bool
+QYamlParser::ns_hex_digit(QChar c)
+{
+  // YAML ns-hex-digit
+  auto lower = c.cell();
+  auto higher = c.row();
+  return (higher == 0 && ((lower >= 0x41 && lower <= 0x46) ||
+                          (lower >= 0x61 && lower <= 0x66)));
+}
+
+bool
+QYamlParser::ns_ascii_char(QChar c)
+{
+  auto lower = c.cell();
+  auto higher = c.row();
+  return (higher == 0 && ((lower >= 0x41 && lower <= 0x5A) ||
+                          (lower >= 0x61 && lower <= 0x7A)));
+}
+
+bool
+QYamlParser::ns_word_char(QChar c)
+{
+  return (ns_dec_digit(c) || ns_ascii_char(c) || c == Characters::HYPHEN);
+}
+
+bool
+QYamlParser::ns_uri_char(const QString& s)
+{
+  // TODO
+  return false;
+}
+
+bool
+QYamlParser::ns_tag_char(QChar c)
+{
+  // TODO
+  //  return ns_uri_char()
+  return false;
+}
+
+bool
+QYamlParser::c_escape(QChar c)
+{
+  return (c == Characters::FORWARDSLASH);
+}
+
+bool
+QYamlParser::c_ns_esc_char(QChar c)
+{
+  return (c == Characters::FORWARDSLASH);
+}
+
+bool
+QYamlParser::ns_esc_null(QChar& c)
+{
+  if (c == Characters::NULLCHAR) {
+    c = Characters::NULLCHAR;
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::ns_esc_bell(QChar& c)
+{
+  if (c == 'a') {
+    c = Characters::BELL;
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::ns_esc_backspace(QChar& c)
+{
+  if (c == 'b') {
+    c = Characters::BACKSPACE;
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::ns_esc_horizontal_tab(QChar& c)
+{
+  if (c == 't') {
+    c = Characters::TAB;
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::ns_esc_linefeed(QChar& c)
+{
+  if (c == 'n') {
+    c = Characters::LF;
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::ns_esc_vertical_tab(QChar& c)
+{
+  if (c == 'v') {
+    c = Characters::VTAB;
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::ns_esc_form_feed(QChar& c)
+{
+  if (c == 'f') {
+    c = Characters::FF;
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::ns_esc_carriage_return(QChar& c)
+{
+  if (c == 'r') {
+    c = Characters::CR;
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::ns_esc_escape(QChar& c)
+{
+  if (c == 'e') {
+    c = Characters::ESCAPE;
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::ns_esc_space(QChar& c)
+{
+  if (c == 'r') {
+    c = Characters::SPACE;
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::ns_esc_double_quote(QChar& c)
+{
+  if (c == '"') {
+    c = Characters::DOUBLEQUOTE;
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::ns_esc_slash(QChar& c)
+{
+  if (c == Characters::FORWARDSLASH) {
+    c = Characters::FORWARDSLASH;
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::ns_esc_next_line(QChar& c)
+{
+  if (c == 'N') {
+    c = Characters::NEXTLINE;
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::ns_esc_backslash(QChar& c)
+{
+  if (c == Characters::BACKSLASH) {
+    c = Characters::BACKSLASH;
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::ns_esc_nb_space(QChar& c)
+{
+  if (c == Characters::LOWLINE) {
+    c = Characters::NBSPACE;
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::ns_esc_line_seperator(QChar& c)
+{
+  if (c == 'L') {
+    c = Characters::LINESEPERATOR;
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::ns_esc_paragraph_seperator(QChar& c)
+{
+  if (c == 'P') {
+    c = Characters::PARASEPERATOR;
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::ns_esc_8_bit(const QString& s)
+{
+  if (s.length() == 4 && c_ns_esc_char(s.at(0)) && s.at(1) == 'x' &&
+      ns_hex_digit(s.at(2)) && ns_hex_digit(s.at(3)))
+    return true;
+  return false;
+}
+
+bool
+QYamlParser::ns_esc_16_bit(const QString& s)
+{
+  if (s.length() == 6 && c_ns_esc_char(s.at(0)) && s.at(1) == 'u' &&
+      ns_hex_digit(s.at(2)) && ns_hex_digit(s.at(3)) && ns_hex_digit(s.at(4)) &&
+      ns_hex_digit(s.at(5)))
+    return true;
+  return false;
+}
+
+bool
+QYamlParser::ns_esc_32_bit(const QString& s)
+{
+  // TODO 32 bit utf
+  return false;
+}
+
+bool
+QYamlParser::c_ns_esc_char(const QString& s)
+{
+  auto good = false;
+  auto l = s.length();
+  if (l > 0) {
+    if (c_ns_esc_char(s.at(0)))
+      good = true;
+    if (good) {
+      good = false;
+      if (l == 2) {
+        auto c = s.at(1);
+        if (ns_esc_null(c) || ns_esc_bell(c) || ns_esc_backspace(c) ||
+            ns_esc_horizontal_tab(c) || ns_esc_linefeed(c) ||
+            ns_esc_vertical_tab(c) || ns_esc_form_feed(c) ||
+            ns_esc_carriage_return(c) || ns_esc_escape(c) || ns_esc_space(c) ||
+            ns_esc_double_quote(c) || ns_esc_slash(c) || ns_esc_next_line(c) ||
+            ns_esc_nb_space(c) || ns_esc_line_seperator(c) ||
+            ns_esc_paragraph_seperator(c) || ns_esc_8_bit(c) ||
+            ns_esc_16_bit(c) || ns_esc_32_bit(c)) {
+        }
+      }
+    }
+  }
+  return false;
+}
+
+YamlTagDirective*
+QYamlParser::ns_tag_directive(const QString& s, int start)
+{
+  YamlTagDirective* directive = nullptr;
+  auto tag = s;
+  auto handlePos = start;
+  if (!c_directive(tag.at(0)))
+    return directive;
+  handlePos++;
+  tag = tag.mid(1);
+  if (!tag.startsWith("TAG"))
+    return directive;
+  tag = tag.mid(3);
+  handlePos += 3;
+  auto len = s_separate_in_line(tag);
+  handlePos += len;
+  tag = tag.mid(len);
+
+  YamlTagDirective::HandleType type = YamlTagDirective::NoType;
+  len = c_tag_handle(tag, type);
+
+  auto handle = tag.mid(1, len);
+  tag = tag.mid(len + 2).trimmed();
+  auto valuePos = handlePos + len + 2;
+  len = s_separate_in_line(tag);
+  tag = tag.mid(len);
+  valuePos += len;
+  directive = new YamlTagDirective(handle, tag, this);
+  directive->setHandleType(type);
+  return directive;
+}
+
+bool
+QYamlParser::nb_json(QChar c)
+{
+  auto lower = c.cell();
+  auto higher = c.row();
+  return (c == Characters::TAB ||
+          (higher == 0 && lower >= 0x20 && lower <= 0xFF) || higher >= 0x1);
 }
 
 QList<QYamlDocument*>::iterator
