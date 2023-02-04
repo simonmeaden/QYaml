@@ -528,7 +528,7 @@ YamlScalar::toString(const QString& text, FlowType override)
 
         break;
 
-      case NoType:
+      case NoFlowType:
         // This should never happen.
         break;
     }
@@ -545,7 +545,7 @@ YamlScalar::toString(const QString& text, FlowType override)
       case Block:
         break;
 
-      case NoType:
+      case NoFlowType:
         // This should never happen.
         break;
     }
@@ -611,6 +611,12 @@ YamlComment::data() const
 //====================================================================
 //=== YamlDirective
 //====================================================================
+YamlDirective::YamlDirective(QObject* parent)
+  : YamlNode(parent)
+{
+  m_type = YamlNode::YamlDirective;
+}
+
 YamlDirective::YamlDirective(int major, int minor, QObject* parent)
   : YamlNode(parent)
   , m_major(major)
@@ -625,10 +631,22 @@ YamlDirective::major() const
   return m_major;
 }
 
+void
+YamlDirective::setMajor(int major)
+{
+  m_major = major;
+}
+
 int
 YamlDirective::minor() const
 {
   return m_minor;
+}
+
+void
+YamlDirective::setMinor(int minor)
+{
+  m_minor = minor;
 }
 
 bool
@@ -637,9 +655,33 @@ YamlDirective::isValid()
   return (m_major == 1 && (m_minor >= 0 && m_minor <= 3));
 }
 
+QTextCursor
+YamlDirective::versionStart() const
+{
+  return m_versionStart;
+}
+
+int
+YamlDirective::versionStartPos() const
+{
+  return m_versionStart.position();
+}
+
+void
+YamlDirective::setVersionStart(const QTextCursor& versionStart)
+{
+  m_versionStart = versionStart;
+}
+
 //====================================================================
 //=== YamlTagDirective
 //====================================================================
+YamlTagDirective::YamlTagDirective(QObject* parent)
+  : YamlNode(parent)
+{
+  m_type = TagDirective;
+}
+
 YamlTagDirective::YamlTagDirective(const QString& handle,
                                    const QString& value,
                                    QObject* parent)
@@ -670,6 +712,24 @@ YamlTagDirective::setValue(const QString& value)
   m_value = value;
 }
 
+void
+YamlTagDirective::setValueStart(QTextCursor cursor)
+{
+  m_valueStart = cursor;
+}
+
+QTextCursor
+YamlTagDirective::valueStart()
+{
+  return m_valueStart;
+}
+
+int
+YamlTagDirective::valueStartPos()
+{
+  return m_valueStart.position();
+}
+
 QString
 YamlTagDirective::handle() const
 {
@@ -682,12 +742,32 @@ YamlTagDirective::setHandle(const QString& id)
   m_handle = id;
 }
 
-YamlTagDirective::HandleType YamlTagDirective::handleType() const
+void
+YamlTagDirective::setHandleStart(QTextCursor cursor)
+{
+  m_handleStart = cursor;
+}
+
+QTextCursor
+YamlTagDirective::handleStart()
+{
+  return m_handleStart;
+}
+
+int
+YamlTagDirective::handleStartPos()
+{
+  return m_handleStart.position();
+}
+
+YamlTagDirective::TagHandleType
+YamlTagDirective::handleType() const
 {
   return m_handleType;
 }
 
-void YamlTagDirective::setHandleType(HandleType handleType)
+void
+YamlTagDirective::setHandleType(TagHandleType handleType)
 {
   m_handleType = handleType;
 }

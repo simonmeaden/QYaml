@@ -101,190 +101,180 @@ QYamlParser::parse(const QString& text, int startPos, int length)
   QString key;
   int keyStart = -1;
 
-  for (auto i = start; i < text.size(); i++) {
-    auto c = text.at(i);
-    if (c == Characters::NEWLINE) {
-      // get leading spaces.
-      if (indent > 0) {
-        // TODO scalar??
+  //  for (auto i = start; i < text.size(); i++) {
+  //    auto c = text.at(i);
+  auto lines = text.split(Characters::NEWLINE);
+  for (auto line : lines) {
+    auto indent = s_indent(line);
+    //    if (c == Characters::NEWLINE) {
+    //      // get leading spaces.
+    //      if (indent > 0) {
+    //        // TODO scalar??
+    //      }
+    //      indent = getInitialSpaces(text, 0, i, c);
+    //      i--; // reposition index.
+    //      t.clear();
+    //      continue;
+    //    } else if (c.isSpace()) {
+    //      if (!isIndentComplete) {
+    //        indent++;
+    //        continue;
+    //      }
+    //      t += c;
+    //      continue;
+    //    } else
+    YamlDirective* yamlDirective = nullptr;
+    YamlTagDirective* tagDirective = nullptr;
+    if (ns_yaml_directive(line, indent, yamlDirective)) {
+      if (yamlDirective) {
+        nodes.append(yamlDirective);
+        rootNodes.append(yamlDirective);
       }
-      indent = getInitialSpaces(text, 0, i, c);
-      i--; // reposition index.
-      t.clear();
-      continue;
-    } else if (c.isSpace()) {
-      if (!isIndentComplete) {
-        indent++;
-        continue;
-      }
-      t += c;
-      continue;
-    } else if (c_directive(c)) {
-      int start = i;
-      auto tag = lookahead(i, text);
-      if (tag.startsWith("%YAML ")) {
-        auto s = tag.mid(5).trimmed();
-        auto splits = s.split(Characters::STOP, Qt::SkipEmptyParts);
-        if (splits.size() == 2) {
-          bool majorOk, minorOk;
-          auto major = splits[0].toInt(&majorOk);
-          auto minor = splits[1].toInt(&minorOk);
-          auto directive = new YamlDirective(major, minor, this);
-          if (!majorOk) {
-            // for future expansion ?
-            if (major < MIN_VERSION_MAJOR || major > MAX_VERSION_MAJOR) {
-              directive->setError(YamlError::InvalidMajorVersion, true);
-            }
-          }
-          if (!minorOk) {
-            if (minor < MIN_VERSION_MINOR || minor > MAX_VERSION_MAJOR) {
-              directive->setError(YamlError::InvalidMinorVersion, true);
-            }
-          }
-          directive->setStart(createCursor(start));
-          directive->setEnd(createCursor(i));
-          nodes.append(directive);
-          rootNodes.append(directive);
-        }
-      } else if (tag.startsWith("%TAG ")) {
-        auto directive = ns_tag_directive(tag, start);
-        //        auto directive = new YamlTagDirective(t, this);
-        //        QRegularExpression re("[!][^!]*[!]");
-        //        auto match = re.match(s);
-        //        if (match.hasMatch()) {
-        //          auto tagid = match.captured(0);
-        //          auto len = match.capturedLength(0);
-        //          directive->setId(tagid.mid(1, len - 2));
-        //          s = s.mid(len).trimmed();
-        //          directive->setValue(s);
-        //        }
-        //        directive->setStart(createCursor(start));
-        //        directive->setEnd(createCursor(start + t.length()));
-        nodes.append(directive);
-        rootNodes.append(directive);
-      }
-    } else if (c == Characters::MINUS) {
-      auto start = i;
-
-      t += c;
-      if (!getNextChar(c, text, i)) {
-        // TODO NOT A TAG DIRECTIVE carry on with something
-        // else.
-        continue;
-      } else if (c == Characters::MINUS) {
-        t += c;
-        if (!getNextChar(c, text, i)) {
-          // TODO NOT A TAG DIRECTIVE carry on with something
-          // else.
-          continue;
-        } else if (c == Characters::MINUS) {
-          t += c;
-          if (indent == 0) {
-            auto startNode = new YamlStart(this);
-            startNode->setStart(createCursor(start));
-            startNode->setEnd(createCursor(start + t.length()));
-            //          if (!doc->hasDirective() || !doc->hasTag()) {
-            //            doc->setStart(startNode->start());
-            //          }
-            nodes.append(startNode);
-            rootNodes.append(startNode);
-          } else {
-            // TODO this will be inside a scalar string
-            continue;
-          }
-          t.clear();
-        }
-      }
-    } else if (c == Characters::POINT) {
-      auto start = i;
-      t += c;
-      if (!getNextChar(c, text, i)) {
-        // TODO NOT A TAG DIRECTIVE carry on with something
-        // else.
-        continue;
-      } else if (c == Characters::POINT) {
-        t += c;
-        if (!getNextChar(c, text, i)) {
-          // TODO NOT A TAG DIRECTIVE carry on with something
-          // else.
-          continue;
-        } else if (c == Characters::POINT) {
-          t += c;
-          if (indent == 0) {
-            auto endNode = new YamlEnd(this);
-            endNode->setStart(createCursor(start));
-            endNode->setEnd(createCursor(start + t.length()));
-            //          if (!doc->hasDirective() || !doc->hasTag()) {
-            //            doc->setEnd(endNode->end());
-            //          }
-            nodes.append(endNode);
-            rootNodes.append(endNode);
-          } else {
-            // TODO this will be inside a scalar string
-            continue;
-          }
-          t.clear();
-        }
-      }
-    } else if (c == Characters::HASH) {
-    } else if (c == Characters::VERTICAL_LINE) { // comments
-      qWarning();
-      continue;
-    } else if (c == Characters::COLON) { // start map item
-      if (!t.isEmpty()) {
-        key = t;
-        keyStart = i - key.length();
-        t.clear();
-      }
-      qWarning();
-    } else if (c == Characters::OPEN_CURLY_BRACKET) { // start map flow
-      auto map = new YamlMap(this);
-      map->setStart(createCursor(i));
-      map->setFlowType(YamlNode::Flow);
-      parseFlowMap(map, ++i, text);
-      //      doc->addData(map);
-      nodes.append(map);
-      rootNodes.append(map);
-    } else if (c == Characters::CLOSE_CURLY_BRACKET) { // end map flow
-      // should happen in parseFlowMap
-      // TODO error ?
-      qWarning();
-    } else if (c == Characters::OPEN_SQUARE_BRACKET) { // start sequence flow
-      auto sequence = new YamlSequence(this);
-      sequence->setStart(createCursor(i));
-      sequence->setFlowType(YamlNode::Flow);
-      parseFlowSequence(sequence, ++i, text);
-      //      doc->addData(sequence);
-      nodes.append(sequence);
-      rootNodes.append(sequence);
-    } else if (c == Characters::CLOSE_SQUARE_BRACKET) { // end sequence flow
-      // should happen in parseFlowSequence.
-      // TODO error ?
-      qWarning();
-    } else if (c == '-') {
-      if (!isHyphen) {
-        isHyphen = true;
-        tStart = i;
-      }
-      t += c;
-      continue;
-    } else if (c == Characters::STOP) {
-      t += c;
-      //      } else if (c == Characters::PERCENT) {
-      //        isTagStart = true;
-      //        tStart = i;
-      //        t += c;
-    } else if (c == Characters::AMPERSAND) {
-      isAnchorStart = true;
-    } else if (c == Characters::ASTERISK) {
-      isLinkStart = true;
-    } else {
-      t += c;
-      if (!isIndentComplete) {
-        isIndentComplete = true;
-      }
-      continue;
+      //      int start = i;
+      //      auto tag = lookahead(i, text);
+      //      if (tag.startsWith("%YAML")) {
+      //        auto directive = ns_yaml_directive(tag, start);
+      //        if (directive) {
+      //          nodes.append(directive);
+      //          rootNodes.append(directive);
+      //        }
+      //      } else if (tag.startsWith("%TAG")) {
+      //        auto directive = ns_tag_directive(tag, start);
+      //        if (directive) {
+      //          nodes.append(directive);
+      //          rootNodes.append(directive);
+      //        }
+      //      }
     }
+    if (ns_tag_directive(line, indent, tagDirective)) {
+      if (tagDirective){
+        nodes.append(yamlDirective);
+        rootNodes.append(yamlDirective);
+      }
+    }
+//    if (c == Characters::MINUS) {
+//      auto start = i;
+
+//      t += c;
+//      if (!getNextChar(c, text, i)) {
+//        // TODO NOT A TAG DIRECTIVE carry on with something
+//        // else.
+//        continue;
+//      } else if (c == Characters::MINUS) {
+//        t += c;
+//        if (!getNextChar(c, text, i)) {
+//          // TODO NOT A TAG DIRECTIVE carry on with something
+//          // else.
+//          continue;
+//        } else if (c == Characters::MINUS) {
+//          t += c;
+//          if (indent == 0) {
+//            auto startNode = new YamlStart(this);
+//            startNode->setStart(createCursor(start));
+//            startNode->setEnd(createCursor(start + t.length()));
+//            //          if (!doc->hasDirective() || !doc->hasTag()) {
+//            //            doc->setStart(startNode->start());
+//            //          }
+//            nodes.append(startNode);
+//            rootNodes.append(startNode);
+//          } else {
+//            // TODO this will be inside a scalar string
+//            continue;
+//          }
+//          t.clear();
+//        }
+//      }
+//    } else if (c == Characters::POINT) {
+//      auto start = i;
+//      t += c;
+//      if (!getNextChar(c, text, i)) {
+//        // TODO NOT A TAG DIRECTIVE carry on with something
+//        // else.
+//        continue;
+//      } else if (c == Characters::POINT) {
+//        t += c;
+//        if (!getNextChar(c, text, i)) {
+//          // TODO NOT A TAG DIRECTIVE carry on with something
+//          // else.
+//          continue;
+//        } else if (c == Characters::POINT) {
+//          t += c;
+//          if (indent == 0) {
+//            auto endNode = new YamlEnd(this);
+//            endNode->setStart(createCursor(start));
+//            endNode->setEnd(createCursor(start + t.length()));
+//            //          if (!doc->hasDirective() || !doc->hasTag()) {
+//            //            doc->setEnd(endNode->end());
+//            //          }
+//            nodes.append(endNode);
+//            rootNodes.append(endNode);
+//          } else {
+//            // TODO this will be inside a scalar string
+//            continue;
+//          }
+//          t.clear();
+//        }
+//      }
+//    } else if () {
+
+//    } else if (c == Characters::VERTICAL_LINE) { // comments
+//      qWarning();
+//      continue;
+//    } else if (c == Characters::COLON) { // start map item
+//      if (!t.isEmpty()) {
+//        key = t;
+//        keyStart = i - key.length();
+//        t.clear();
+//      }
+//      qWarning();
+//    } else if (c == Characters::OPEN_CURLY_BRACKET) { // start map flow
+//      auto map = new YamlMap(this);
+//      map->setStart(createCursor(i));
+//      map->setFlowType(YamlNode::Flow);
+//      parseFlowMap(map, ++i, text);
+//      //      doc->addData(map);
+//      nodes.append(map);
+//      rootNodes.append(map);
+//    } else if (c == Characters::CLOSE_CURLY_BRACKET) { // end map flow
+//      // should happen in parseFlowMap
+//      // TODO error ?
+//      qWarning();
+//    } else if (c == Characters::OPEN_SQUARE_BRACKET) { // start sequence flow
+//      auto sequence = new YamlSequence(this);
+//      sequence->setStart(createCursor(i));
+//      sequence->setFlowType(YamlNode::Flow);
+//      parseFlowSequence(sequence, ++i, text);
+//      //      doc->addData(sequence);
+//      nodes.append(sequence);
+//      rootNodes.append(sequence);
+//    } else if (c == Characters::CLOSE_SQUARE_BRACKET) { // end sequence flow
+//      // should happen in parseFlowSequence.
+//      // TODO error ?
+//      qWarning();
+//    } else if (c == '-') {
+//      if (!isHyphen) {
+//        isHyphen = true;
+//        tStart = i;
+//      }
+//      t += c;
+//      continue;
+//    } else if (c == Characters::STOP) {
+//      t += c;
+//      //      } else if (c == Characters::PERCENT) {
+//      //        isTagStart = true;
+//      //        tStart = i;
+//      //        t += c;
+//    } else if (c == Characters::AMPERSAND) {
+//      isAnchorStart = true;
+//    } else if (c == Characters::ASTERISK) {
+//      isLinkStart = true;
+//    } else {
+//      t += c;
+//      if (!isIndentComplete) {
+//        isIndentComplete = true;
+//      }
+//      continue;
+//    }
   }
 
   // build the documents.
@@ -317,6 +307,11 @@ QYamlParser::buildDocuments(const QString& text,
 
     if (!docStarted) {
       if (type == YamlNode::YamlDirective) {
+        if (doc->hasDirective()) {
+          // TODO error - there must be two in this document
+          // should't happen here - new document.
+          node->setError(YamlError::TooManyYamlDirectivesError, true);
+        }
         doc->setDirective(qobject_cast<YamlDirective*>(node));
         // if the document has a %YAML directive then set start to it's start.
         doc->setStart(node->start());
@@ -326,6 +321,10 @@ QYamlParser::buildDocuments(const QString& text,
       if (type == YamlNode::YamlDirective) {
         // this is either a new document or an error
         // TODO handle error
+        if (doc->hasDirective()) {
+          // TODO error - there must be two in this document
+          node->setError(YamlError::TooManyYamlDirectivesError, true);
+        }
         i--; // step back before directive.
         if (!doc->hasEnd()) {
           // create end position but no node.
@@ -941,9 +940,21 @@ QYamlParser::c_mapping_end(QChar c)
 }
 
 bool
-QYamlParser::c_comment(QChar c)
+QYamlParser::c_nb_comment_text(const QString& line, QString& comment)
 {
-  return (c == Characters::HASH);
+  auto indent = s_indent(line);
+  auto text = line;
+  auto c = line.at(indent + 1);
+  text = text.mid(indent + 1);
+  if (c_comment(c)) {
+    comment = c;
+    c = text.at(0);
+    text = text.mid(1);
+    while (nb_char(c)) {
+      comment += c;
+    }
+  }
+  return false;
 }
 
 bool
@@ -1117,6 +1128,161 @@ QYamlParser::c_printable(QChar c)
 }
 
 bool
+QYamlParser::c_ns_properties(const QString s,
+                             QString& result,
+                             YamlNode::TagHandleType& type)
+{
+  QString anchor, tag;
+  if (c_ns_tag_property(s, tag, type)) {
+    result = tag;
+    return true;
+  } else if (c_ns_anchor_property(s, anchor)) {
+    result = anchor;
+    type = YamlNode::Anchor;
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::c_ns_tag_property(const QString& line,
+                               QString& tag,
+                               YamlNode::TagHandleType& type)
+{
+  auto value = line;
+  auto c = value.at(0);
+
+  if (c_verbatim_tag(line, tag)) {
+    return true;
+  } else if (c_ns_shorthand_tag(line, tag, type)) {
+    type = YamlNode::Shorthand;
+    return true;
+  } else if (value.at(0) == Characters::EXCLAMATIONMARK) {
+    type = YamlNode::NonSpecific;
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::c_verbatim_tag(const QString& line, QString& uri)
+{
+  auto value = line;
+  QString result;
+  auto c = value.at(0);
+  if (c == Characters::LT) { // !
+    value = value.mid(1);
+    c = value.at(0);
+    if (c_folded(c)) { // <
+      value = value.mid(1);
+      c = value.at(0);
+      while (ns_uri_char(c)) {
+        result += c;
+      }
+      value = value.mid(1);
+      c = value.at(0);
+      if (c == Characters::GT) {
+        uri = result;
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool
+QYamlParser::c_ns_shorthand_tag(const QString& line,
+                                QString& tag,
+                                YamlNode::TagHandleType& type)
+{
+  if (c_tag_handle(line, tag, type)) {
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::c_tag_handle(const QString& line,
+                          QString& tag,
+                          YamlNode::TagHandleType& type)
+{
+  if (c_named_tag_handle(line, tag)) {
+    type = YamlNode::Named;
+  } else if (c_secondary_tag_handle(line)) {
+    type = YamlNode::Secondary;
+  } else if (c_primary_tag_handle(line)) {
+    type = YamlNode::Primary;
+  }
+  return false;
+}
+
+bool
+QYamlParser::c_primary_tag_handle(const QString& line)
+{
+  auto value = line;
+  QString result;
+  auto c = value.at(0);
+  if (c_tag(c)) {
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::c_secondary_tag_handle(const QString& line)
+{
+  auto value = line;
+  QString result;
+  auto c = value.at(0);
+  if (c_tag(c)) {
+    value = value.mid(1);
+    c = value.at(0);
+    if (c_tag(c)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool
+QYamlParser::c_named_tag_handle(const QString& line, QString& tag)
+{
+  auto value = line;
+  QString result;
+  auto c = value.at(0);
+  if (c_tag(c)) {
+    value = value.mid(1);
+    c = value.at(0);
+    while (ns_word_char(c)) {
+      result += c;
+      value = value.mid(1);
+      c = value.at(0);
+    }
+    if (c_tag(c)) {
+      tag = result;
+      return true;
+    }
+  }
+  return false;
+}
+
+bool
+QYamlParser::c_ns_anchor_property(const QString& line, QString& anchor)
+{
+  auto value = line;
+  auto c = value.at(0);
+  if (!c_anchor(c))
+    return false;
+  value = value.mid(1);
+  QString name;
+  if (ns_anchor_name(value)) {
+    anchor = name;
+    return true;
+  }
+  return false;
+}
+
+bool
 QYamlParser::ns_dec_digit(QChar c)
 {
   // YAML ns-dec-digit
@@ -1149,9 +1315,34 @@ QYamlParser::ns_word_char(QChar c)
 }
 
 bool
-QYamlParser::ns_uri_char(const QString& s)
+QYamlParser::ns_uri_char(const QString& line)
 {
-  // TODO
+  auto value = line;
+  auto c = value.at(0);
+  if (ns_word_char(c) || c == Characters::HASH || c == Characters::SEMICOLON ||
+      c == Characters::FORWARDSLASH || c == Characters::QUESTIONMARK ||
+      c == Characters::COLON || c == Characters::COMMERCIAL_AT ||
+      c == Characters::AMPERSAND || c == Characters::EQUALS ||
+      c == Characters::PLUS || c == Characters::DOLLAR ||
+      c == Characters::COMMA || c == Characters::LOWLINE ||
+      c == Characters::STOP || c == Characters::EXCLAMATIONMARK ||
+      c == Characters::TILDE || c == Characters::ASTERISK ||
+      c == Characters::SINGLEQUOTE || c == Characters::OPEN_ROUND_BRACKET ||
+      c == Characters::CLOSE_ROUND_BRACKET ||
+      c == Characters::OPEN_SQUARE_BRACKET ||
+      c == Characters::CLOSE_SQUARE_BRACKET) {
+    return true;
+  } else if (c == Characters::PERCENT) {
+    value = value.mid(1);
+    c = value.at(0);
+    if (ns_hex_digit(c)) {
+      value = value.mid(1);
+      c = value.at(0);
+      if (ns_hex_digit(c)) {
+        return true;
+      }
+    }
+  }
   return false;
 }
 
@@ -1346,43 +1537,43 @@ QYamlParser::ns_esc_paragraph_seperator(QChar& c)
 }
 
 bool
-QYamlParser::ns_esc_8_bit(const QString& s)
+QYamlParser::ns_esc_8_bit(const QString& line)
 {
-  if (s.length() == 4 && c_ns_esc_char(s.at(0)) && s.at(1) == 'x' &&
-      ns_hex_digit(s.at(2)) && ns_hex_digit(s.at(3)))
+  if (line.length() == 4 && c_ns_esc_char(line.at(0)) && line.at(1) == 'x' &&
+      ns_hex_digit(line.at(2)) && ns_hex_digit(line.at(3)))
     return true;
   return false;
 }
 
 bool
-QYamlParser::ns_esc_16_bit(const QString& s)
+QYamlParser::ns_esc_16_bit(const QString& line)
 {
-  if (s.length() == 6 && c_ns_esc_char(s.at(0)) && s.at(1) == 'u' &&
-      ns_hex_digit(s.at(2)) && ns_hex_digit(s.at(3)) && ns_hex_digit(s.at(4)) &&
-      ns_hex_digit(s.at(5)))
+  if (line.length() == 6 && c_ns_esc_char(line.at(0)) && line.at(1) == 'u' &&
+      ns_hex_digit(line.at(2)) && ns_hex_digit(line.at(3)) &&
+      ns_hex_digit(line.at(4)) && ns_hex_digit(line.at(5)))
     return true;
   return false;
 }
 
 bool
-QYamlParser::ns_esc_32_bit(const QString& s)
+QYamlParser::ns_esc_32_bit(const QString& line)
 {
   // TODO 32 bit utf
   return false;
 }
 
 bool
-QYamlParser::c_ns_esc_char(const QString& s)
+QYamlParser::c_ns_esc_char(const QString& line)
 {
   auto good = false;
-  auto l = s.length();
+  auto l = line.length();
   if (l > 0) {
-    if (c_ns_esc_char(s.at(0)))
+    if (c_ns_esc_char(line.at(0)))
       good = true;
     if (good) {
       good = false;
       if (l == 2) {
-        auto c = s.at(1);
+        auto c = line.at(1);
         if (ns_esc_null(c) || ns_esc_bell(c) || ns_esc_backspace(c) ||
             ns_esc_horizontal_tab(c) || ns_esc_linefeed(c) ||
             ns_esc_vertical_tab(c) || ns_esc_form_feed(c) ||
@@ -1398,37 +1589,223 @@ QYamlParser::c_ns_esc_char(const QString& s)
   return false;
 }
 
-YamlTagDirective*
-QYamlParser::ns_tag_directive(const QString& s, int start)
+bool
+QYamlParser::ns_tag_directive(const QString& line,
+                              int start,
+                              YamlTagDirective* directive)
 {
-  YamlTagDirective* directive = nullptr;
-  auto tag = s;
-  auto handlePos = start;
+  auto tag = line.mid(start);
+  auto len = 0;
+  auto digit = 0;
+  auto versionStart = start;
+
   if (!c_directive(tag.at(0)))
-    return directive;
-  handlePos++;
+    return false;
   tag = tag.mid(1);
+  versionStart++;
+
   if (!tag.startsWith("TAG"))
-    return directive;
+    return false;
   tag = tag.mid(3);
-  handlePos += 3;
-  auto len = s_separate_in_line(tag);
-  handlePos += len;
-  tag = tag.mid(len);
+  versionStart += 3;
 
-  YamlTagDirective::HandleType type = YamlTagDirective::NoType;
-  len = c_tag_handle(tag, type);
-
-  auto handle = tag.mid(1, len);
-  tag = tag.mid(len + 2).trimmed();
-  auto valuePos = handlePos + len + 2;
-  len = s_separate_in_line(tag);
+  len = start_whitespace(tag);
   tag = tag.mid(len);
-  valuePos += len;
+  versionStart += len;
+
+  directive = new YamlTagDirective(this);
+
+  YamlTagDirective::TagHandleType type = YamlTagDirective::NoTagType;
+  QString result;
+  len = c_tag_handle(tag, result, type);
+  QString handle, value;
+  auto handleStart = 0;
+  auto valueStart = 0;
+
+  if (type == YamlTagDirective::Named) {
+    handle = tag.mid(1, len);
+    handleStart++;
+    valueStart = handleStart + len + 2;
+    tag = tag.mid(len + 2).trimmed();
+    directive->setHandle(handle); // only Named has a handle
+    directive->setHandleStart(createCursor(handleStart));
+  } else if (type == YamlTagDirective::Secondary) {
+    tag = tag.mid(2);
+    handleStart++;
+    valueStart = handleStart + 1;
+  } else if (type == YamlTagDirective::Primary) {
+    tag = tag.mid(1);
+    valueStart = handleStart + 1;
+  }
+  len = start_whitespace(tag);
+  tag = tag.mid(len);
+  valueStart += len;
   directive = new YamlTagDirective(handle, tag, this);
+  directive->setStart(createCursor(start));
+  directive->setEnd(createCursor(start + line.length()));
   directive->setHandleType(type);
-  return directive;
+  directive->setValueStart(createCursor(valueStart));
+  return true;
 }
+
+bool
+QYamlParser::ns_yaml_directive(const QString& line,
+                               int start,
+                               YamlDirective* directive)
+{
+  auto tag = line.mid(start);
+  auto len = 0;
+  auto digit = 0;
+  auto versionStart = start;
+
+  if (!c_directive(tag.at(0)))
+    return false;
+  tag = tag.mid(1);
+  versionStart++;
+
+  if (!tag.startsWith("YAML"))
+    return false;
+  tag = tag.mid(4);
+  versionStart += 4;
+
+  len = start_whitespace(tag);
+  tag = tag.mid(len);
+  versionStart += len;
+
+  directive = new YamlDirective(this);
+  auto c = tag.at(0);
+  if (ns_dec_digit(c)) {
+    digit = c.digitValue();
+    directive->setMajor(digit);
+    // for future expansion ?
+    if (digit < MIN_VERSION_MAJOR || digit > MAX_VERSION_MAJOR) {
+      directive->setError(YamlError::InvalidMajorVersion, true);
+    }
+  } else {
+    directive->setError(YamlError::BadYamlDirective, true);
+  }
+  tag = tag.mid(1);
+
+  c = tag.at(0);
+  if (c != Characters::POINT) {
+    directive->setError(YamlError::BadYamlDirective, true);
+  }
+  tag = tag.mid(1);
+
+  c = tag.at(0);
+  if (ns_dec_digit(c)) {
+    digit = c.digitValue();
+    directive->setMinor(digit);
+    if (digit < MIN_VERSION_MINOR || digit > MAX_VERSION_MINOR) {
+      directive->setError(YamlError::InvalidMinorVersion, true);
+    }
+  } else {
+    directive->setError(YamlError::BadYamlDirective, true);
+  }
+  tag = tag.mid(1);
+
+  directive->setStart(createCursor(start));
+  directive->setEnd(createCursor(start + line.length()));
+  directive->setVersionStart(createCursor(versionStart));
+
+  return true;
+}
+
+int
+QYamlParser::s_indent(const QString& line)
+{
+  auto indent = 0;
+  auto c = line.at(indent);
+  while (s_space(c)) {
+    indent++;
+  }
+  return indent;
+}
+
+bool
+QYamlParser::s_indent_less_than(int value, const QString& s)
+{
+  int indent = s_indent(s);
+  if (indent < value)
+    return true;
+  return false;
+}
+
+bool
+QYamlParser::s_indent_less_or_equal(int value, const QString& s)
+{
+  int indent = s_indent(s);
+  if (indent <= value)
+    return true;
+  return false;
+}
+
+bool
+QYamlParser::b_as_space(QChar c)
+{
+  return (b_break(c));
+}
+
+int
+QYamlParser::start_whitespace(const QString& s)
+{
+  //  for (auto c : s) {
+  //    if (!s_white(c))
+  //      return false;
+  //  }
+  auto len = 0;
+  for (auto c : s) {
+    if (!s_white(c))
+      break;
+    len++;
+  }
+  return len;
+}
+
+bool
+QYamlParser::ns_anchor_char(QChar c)
+{
+  return (ns_char(c) && !c_flow_indicator(c));
+}
+
+bool
+QYamlParser::ns_anchor_name(QString& line)
+{
+  auto c = line.at(0);
+  QString result;
+  while (ns_anchor_char(c)) {
+    result += c;
+  }
+  line = result;
+  return true;
+}
+
+//int
+//QYamlParser::c_tag_handle(const QString& line,
+//                          YamlTagDirective::TagHandleType& type)
+//{
+//  auto len = 0;
+//  auto s = line;
+//  if (!c_tag(s.at(0))) // first !
+//    return -1;
+//  s = s.mid(1);
+//  auto c = s.at(0);
+//  while (!c_tag(c)) {
+//    if (s_white(c)) {
+//      type = YamlTagDirective::Primary;
+//      return 0;
+//    } else if (nb_char(c)) {
+//      type = YamlTagDirective::Named;
+//      // TODO possible error if len > 0
+//      len++;
+//    }
+//    s = s.mid(1);
+//    c = line.at(0);
+//  }
+//  if (len == 0)
+//    type = YamlTagDirective::Secondary;
+//  return len;
+//}
 
 bool
 QYamlParser::nb_json(QChar c)

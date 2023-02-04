@@ -11,7 +11,7 @@ class YamlNode : public QObject
 public:
   enum FlowType
   {
-    NoType,
+    NoFlowType,
     Flow,
     Block,
   };
@@ -28,6 +28,17 @@ public:
     Sequence,
     Comment,
   };
+  enum TagHandleType
+  {
+    NoTagType,
+    Named,
+    Secondary,
+    Primary,
+    Shorthand,
+    NonSpecific,
+    Anchor, // an anchor NOT a tag type
+  };
+
 
   YamlNode(QObject* parent = nullptr);
 
@@ -130,7 +141,7 @@ public:
   //! can only contain flow collections and flow scalars, not block collections
   //! and scalars. In these cases the override flow can be used to override
   //! the stored flow type.
-  virtual QString toString(const QString& text, FlowType override = NoType);
+  virtual QString toString(const QString& text, FlowType override = NoFlowType);
 
   static const QStringList errorText(YamlErrors errors)
   {
@@ -165,7 +176,8 @@ public:
       if (warnings.testFlag(InvalidMinorVersionWarning))
         list.append(tr("The minor version is invalid"));
       if (warnings.testFlag(TabCharsDiscouraged))
-        list.append(tr("The use of literal tabs (\\t) characters is discouraged."));
+        list.append(
+          tr("The use of literal tabs (\\t) characters is discouraged."));
       // TODO complete the entire warnings flags
     }
     return list;
@@ -187,50 +199,64 @@ private:
   YamlErrors m_errors;
   YamlWarnings m_warnings;
   QMap<QTextCursor, YamlWarning> m_dodgyChars;
-
 };
 
 class YamlDirective : public YamlNode
 {
   Q_OBJECT
 public:
+  YamlDirective(QObject* parent);
   YamlDirective(int major, int minor, QObject* parent);
 
   int major() const;
+  void setMajor(int major);
+
   int minor() const;
+  void setMinor(int minor);
+
   bool isValid();
+
+  QTextCursor versionStart() const;
+  int versionStartPos() const;
+  void setVersionStart(const QTextCursor& versionStart);
 
 private:
   int m_major = 1;
   int m_minor = 2;
+  QTextCursor m_versionStart;
 };
 
 class YamlTagDirective : public YamlNode
 {
   Q_OBJECT
 public:
-  enum HandleType {
-    NoType,
-    Named,
-    Secondary,
-    Primary,
-  };
-  YamlTagDirective(const QString& handle, const QString& value, QObject* parent);
+  YamlTagDirective(QObject* parent);
+  YamlTagDirective(const QString& handle,
+                   const QString& value,
+                   QObject* parent);
 
   bool isValid();
 
   QString value() const;
   void setValue(const QString& value);
+  void setValueStart(QTextCursor cursor);
+  QTextCursor valueStart();
+  int valueStartPos();
 
   QString handle() const;
-  void setHandle(const QString &id);
+  void setHandle(const QString& id);
+  void setHandleStart(QTextCursor cursor);
+  QTextCursor handleStart();
+  int handleStartPos();
 
-  HandleType handleType() const;
-  void setHandleType(HandleType handleType);
+  TagHandleType handleType() const;
+  void setHandleType(TagHandleType handleType);
 
 private:
-  HandleType m_handleType = NoType;
+  TagHandleType m_handleType = NoTagType;
+  QTextCursor m_handleStart;
   QString m_handle;
+  QTextCursor m_valueStart;
   QString m_value;
 };
 

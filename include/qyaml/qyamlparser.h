@@ -139,10 +139,10 @@ private:
   int m_currentVersion = 12;
 
   static constexpr int MAX_VERSION = 12;
-  static constexpr int MIN_VERSION_MINOR = 1;
-  static constexpr int MAX_VERSION_MINOR = 2;
   static constexpr int MIN_VERSION_MAJOR = 1;
   static constexpr int MAX_VERSION_MAJOR = 1; // for future expansion ??
+  static constexpr int MIN_VERSION_MINOR = 0;
+  static constexpr int MAX_VERSION_MINOR = 2;
   static constexpr int VERSION_MAJOR = 1;
   static constexpr int VERSION_MINOR = 2;
   static constexpr int VERSION_PATCH = 2;
@@ -178,6 +178,13 @@ private:
   QString lookahead(int& index,
                     const QString& text,
                     QChar endof = Characters::NEWLINE);
+//  bool hasYamlDirective()
+//  {
+//    // TODO
+//    //    for (auto node : m_nodes) {
+//    //    }
+//    return false;
+//  }
 
   bool c_indicator(QChar c);
   bool c_flow_indicator(QChar c);
@@ -192,7 +199,62 @@ private:
   bool c_sequence_end(QChar c);
   bool c_mapping_start(QChar c);
   bool c_mapping_end(QChar c);
-  bool c_comment(QChar c);
+  bool c_comment(QChar c)
+  {
+    return (c == Characters::HASH);
+  }
+  bool b_comment(const QString& line)
+  {
+    auto c = line.at(0);
+    if (b_non_content(c))
+      return true;
+    return false;
+  }
+  bool s_b_comment(const QString& line, int start, QString& commentText)
+  {
+    return s_b_comment(line.mid(start), commentText);
+  }
+  bool s_b_comment(const QString& s, QString& commentText)
+  {
+    auto len = start_whitespace(s);
+    auto text = s.mid(len);
+    QString comment;
+    if (c_nb_comment_text(text, comment)) {
+      commentText = comment;
+      return true;
+    }
+    return b_comment(text);
+  }
+  bool l_comment(const QString& s, int start, QString& commentText)
+  {
+    auto text = s.mid(start);
+    auto len = start_whitespace(text);
+    if (len == 0)
+      return false;
+    text = text.mid(len);
+    QString comment;
+    if (c_nb_comment_text(text, comment)) {
+      commentText = comment;
+      return true;
+    }
+    return b_comment(text);
+  }
+  bool s_l_comments(const QString& line, int start, QString& commentText)
+  {
+    if (s_b_comment(line, commentText)) {
+      return true;
+    }
+    QString comment;
+    while (l_comment(line, start, comment)) {
+      commentText += Characters::NEWLINE;
+      commentText += comment;
+    }
+    if (commentText.isEmpty())
+      return false;
+    return true;
+  }
+  bool b_as_line_feed(QChar c) { return (b_break(c)); }
+  bool c_nb_comment_text(const QString& line, QString& comment);
   bool c_anchor(QChar c);
   bool c_alias(QChar c);
   bool c_tag(QChar c);
@@ -202,28 +264,70 @@ private:
   bool c_double_quote(QChar c);
   bool c_directive(QChar c);
   bool c_reserved(QChar c);
+  bool c_escape(QChar c);
+  bool c_ns_esc_char(QChar c);
+  bool c_ns_esc_char(const QString& line);
+  bool c_printable(QChar c);
+  bool c_ns_properties(const QString s,
+                       QString& result,
+                       YamlNode::TagHandleType& type);
+
+  bool c_ns_tag_property(const QString& line,
+                         QString& tag,
+                         YamlNode::TagHandleType& type);
+
+  bool c_verbatim_tag(const QString& line, QString& uri);
+
+  //! Returns true if the string s contains valid ns shorthand tag. The tag
+  //! value is set to the correct tag name if the tag is a named type. The type
+  //! attribute is set to either YamlNode::Named, YamlNode::Secondary or
+  //! YamlNode::Primary to specify the tag type.
+  bool c_ns_shorthand_tag(const QString& line,
+                          QString& tag,
+                          YamlNode::TagHandleType& type);
+  bool c_tag_handle(const QString& line,
+                    QString& tag,
+                    YamlNode::TagHandleType& type);
+  bool c_primary_tag_handle(const QString& line);
+  bool c_secondary_tag_handle(const QString& line);
+  bool c_named_tag_handle(const QString& line, QString& tag);
+
+  bool c_ns_anchor_property(const QString& line, QString& anchor);
+
   bool b_line_feed(QChar c);
   bool b_carriage_return(QChar c);
   bool b_char(QChar c);
-  //  bool nb_char(QChar c);
-  bool s_space(QChar c);
-  bool s_tab(QChar c);
-  bool s_white(QChar c);
-  bool ns_char(QChar c);
   bool b_break(QChar c1, QChar c2);
   bool b_break(QChar c);
   bool b_as_line_feed(QChar& c);
   bool b_as_line_feed(QChar& c1, QChar& c2);
   bool b_non_content(QChar& c);
-  bool c_printable(QChar c);
+
+  bool s_space(QChar c);
+  bool s_tab(QChar c);
+  bool s_white(QChar c);
+  int s_indent(const QString& line);
+  bool s_indent_less_than(int value, const QString& line);
+  bool s_indent_less_or_equal(int value, const QString& line);
+  // TODO s-line-prefix
+  // TODO s-block-line-prefix
+  // TODO s-flow-line-prefix
+  // TODO s-separate-in-line
+  // TODO l-empty
+  // TODO b-l-trimmed
+  // TODO b-l-folded
+  // TODO s-flow-folded
+  bool b_as_space(QChar c);
+  //! Returns length of whitespace characters at start of text.
+  int start_whitespace(const QString& s);
+
+  bool ns_char(QChar c);
   bool ns_dec_digit(QChar c);
   bool ns_hex_digit(QChar c);
   bool ns_ascii_char(QChar c);
   bool ns_word_char(QChar c);
-  bool ns_uri_char(const QString& s);
+  bool ns_uri_char(const QString& line);
   bool ns_tag_char(QChar c);
-  bool c_escape(QChar c);
-  bool c_ns_esc_char(QChar c);
   bool ns_esc_null(QChar& c);
   bool ns_esc_bell(QChar& c);
   bool ns_esc_backspace(QChar& c);
@@ -241,92 +345,14 @@ private:
   bool ns_esc_nb_space(QChar& c);
   bool ns_esc_line_seperator(QChar& c);
   bool ns_esc_paragraph_seperator(QChar& c);
-  bool ns_esc_8_bit(const QString& s);
-  bool ns_esc_16_bit(const QString& s);
-  bool ns_esc_32_bit(const QString& s);
-  bool c_ns_esc_char(const QString& s);
+  bool ns_esc_8_bit(const QString& line);
+  bool ns_esc_16_bit(const QString& line);
+  bool ns_esc_32_bit(const QString& line);
   bool ns_tag_prefix(QChar c) { return false; }
-  YamlTagDirective* ns_tag_directive(const QString& s, int start);
-  int c_tag_handle(const QString& text, YamlTagDirective::HandleType& type)
-  {
-    auto len = 0;
-    auto s = text;
-    if (!c_tag(s.at(0)))
-      return -1;
-    s = s.mid(1);
-    auto c = s.at(0);
-    while (!c_tag(c)) {
-      if (nb_char(c)) {
-        if (len == 0)
-          type = YamlTagDirective::Primary;
-        // TODO possible error if len > 0
-        return len;
-      } else if (ns_word_char(c)) {
-        len++;
-        s = s.mid(1);
-        c = s.at(0);
-      }
-    }
-    if (len == 0)
-      type = YamlTagDirective::Secondary;
-    else
-      type = YamlTagDirective::Named;
-    return len;
-  }
-  int c_named_tag_handle(const QString& text)
-  {
-    auto len = 0;
-    auto s = text;
-    if (!c_tag(s.at(0)))
-      return -1;
-    s = s.mid(1);
-    auto c = s.at(0);
-    while (!c_tag(c)) {
-      if (ns_word_char(c)) {
-        len++;
-        s = s.mid(1);
-        c = s.at(0);
-      }
-    }
-    return len;
-  }
-  int c_secondary_tag_handle(const QString& text)
-  {
-    auto len = 0;
-
-    return len;
-  }
-
-  bool ns_local_tag_prefix(QChar c) { return false; }
-  bool ns_global_tag_prefix(const QString& s)
-  { // TODO
-    return false;
-  }
-  int s_separate_in_line(const QString& text)
-  {
-    auto len = 0;
-    auto s = text;
-    while (s.at(0).isSpace()) {
-      len++;
-      s = s.mid(1);
-    }
-    return len;
-  }
-
-  bool start_of_line(QChar c)
-  {
-    // TODO
-    return false;
-  }
+  bool ns_yaml_directive(const QString& line, int start, YamlDirective *directive);
+  bool ns_tag_directive(const QString& line, int start, YamlTagDirective *directive);
+  bool ns_anchor_char(QChar c);
+  bool ns_anchor_name(QString& line);
 
   bool nb_json(QChar c);
-
-  bool isNSPlainFirst(QChar c)
-  { // TODO
-    return false;
-  }
-  bool isNSPlainSafe(QChar c1, QChar c2)
-  { // TODO
-    return false;
-  }
 };

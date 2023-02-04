@@ -105,7 +105,7 @@ QYamlHighlighter::highlightBlock(const QString& text)
         }
         case YamlNode::MapItem: {
           auto n = qobject_cast<YamlMapItem*>(node);
-          auto type = n->data()->type();
+//          auto type = n->data()->type();
           if (n) {
             setMapItemFormat(n, blockStart, text.length());
           }
