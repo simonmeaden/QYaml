@@ -10,14 +10,14 @@ YamlNode::YamlNode(QObject* parent)
 {
 }
 
-YamlNode*
+SharedNode
 YamlNode::parent() const
 {
   return m_parent;
 }
 
 void
-YamlNode::setParent(YamlNode* Parent)
+YamlNode::setParent(SharedNode Parent)
 {
   m_parent = Parent;
 }
@@ -214,27 +214,28 @@ YamlMap::YamlMap(QObject* parent)
   m_type = Map;
 }
 
-YamlMap::YamlMap(QMap<QString, YamlMapItem*> data, QObject* parent)
+YamlMap::YamlMap(QMap<QString, QSharedPointer<YamlMapItem>> data,
+                 QObject* parent)
   : YamlNode(parent)
   , m_data(data)
 {
   m_type = Map;
 }
 
-QMap<QString, YamlMapItem*>
+QMap<QString, QSharedPointer<YamlMapItem>>
 YamlMap::data() const
 {
   return m_data;
 }
 
 void
-YamlMap::setData(QMap<QString, YamlMapItem*> data)
+YamlMap::setData(QMap<QString, QSharedPointer<YamlMapItem>> data)
 {
   m_data = data;
 }
 
 bool
-YamlMap::insert(const QString& key, YamlMapItem* data)
+YamlMap::insert(const QString& key, QSharedPointer<YamlMapItem> data)
 {
   if (data) {
     //    if (!m_data.contains(key)) {
@@ -251,7 +252,7 @@ YamlMap::remove(const QString& key)
   return m_data.remove(key);
 }
 
-YamlMapItem*
+QSharedPointer<YamlMapItem>
 YamlMap::value(const QString& key)
 {
   return m_data.value(key);
@@ -280,7 +281,9 @@ YamlMapItem::YamlMapItem(QObject* parent)
   m_type = MapItem;
 }
 
-YamlMapItem::YamlMapItem(const QString& key, YamlNode* data, QObject* parent)
+YamlMapItem::YamlMapItem(const QString& key,
+                         SharedNode data,
+                         QObject* parent)
   : YamlNode(parent)
   , m_key{ key }
   , m_data{ data }
@@ -306,14 +309,14 @@ YamlMapItem::keyLength() const
   return m_key.length();
 }
 
-YamlNode*
+SharedNode
 YamlMapItem::data() const
 {
   return m_data;
 }
 
 void
-YamlMapItem::setData(YamlNode* data)
+YamlMapItem::setData(SharedNode data)
 {
   m_data = data;
 }
@@ -361,27 +364,28 @@ YamlSequence::YamlSequence(QObject* parent)
   m_type = Sequence;
 }
 
-YamlSequence::YamlSequence(QVector<YamlNode*> sequence, QObject* parent)
+YamlSequence::YamlSequence(QVector<SharedNode> sequence,
+                           QObject* parent)
   : YamlNode(parent)
   , m_data(sequence)
 {
   m_type = Sequence;
 }
 
-QVector<YamlNode*>
+QVector<SharedNode>
 YamlSequence::data() const
 {
   return m_data;
 }
 
 void
-YamlSequence::setData(QVector<YamlNode*> data)
+YamlSequence::setData(QVector<SharedNode> data)
 {
   m_data = data;
 }
 
 bool
-YamlSequence::append(YamlNode* data)
+YamlSequence::append(SharedNode data)
 {
   if (!m_data.contains(data)) {
     m_data.append(data);
@@ -397,7 +401,7 @@ YamlSequence::remove(int index)
 }
 
 int
-YamlSequence::indexOf(YamlNode* node)
+YamlSequence::indexOf(SharedNode node)
 {
   return m_data.indexOf(node);
 }
@@ -609,16 +613,16 @@ YamlComment::data() const
 }
 
 //====================================================================
-//=== YamlDirective
+//=== YamlYamlDirective
 //====================================================================
-YamlDirective::YamlDirective(QObject* parent)
-  : YamlNode(parent)
+YamlYamlDirective::YamlYamlDirective(QObject* parent)
+  : YamlDirective(parent)
 {
   m_type = YamlNode::YamlDirective;
 }
 
-YamlDirective::YamlDirective(int major, int minor, QObject* parent)
-  : YamlNode(parent)
+YamlYamlDirective::YamlYamlDirective(int major, int minor, QObject* parent)
+  : YamlDirective(parent)
   , m_major(major)
   , m_minor(minor)
 {
@@ -626,49 +630,49 @@ YamlDirective::YamlDirective(int major, int minor, QObject* parent)
 }
 
 int
-YamlDirective::major() const
+YamlYamlDirective::major() const
 {
   return m_major;
 }
 
 void
-YamlDirective::setMajor(int major)
+YamlYamlDirective::setMajor(int major)
 {
   m_major = major;
 }
 
 int
-YamlDirective::minor() const
+YamlYamlDirective::minor() const
 {
   return m_minor;
 }
 
 void
-YamlDirective::setMinor(int minor)
+YamlYamlDirective::setMinor(int minor)
 {
   m_minor = minor;
 }
 
 bool
-YamlDirective::isValid()
+YamlYamlDirective::isValid()
 {
   return (m_major == 1 && (m_minor >= 0 && m_minor <= 3));
 }
 
 QTextCursor
-YamlDirective::versionStart() const
+YamlYamlDirective::versionStart() const
 {
   return m_versionStart;
 }
 
 int
-YamlDirective::versionStartPos() const
+YamlYamlDirective::versionStartPos() const
 {
   return m_versionStart.position();
 }
 
 void
-YamlDirective::setVersionStart(const QTextCursor& versionStart)
+YamlYamlDirective::setVersionStart(const QTextCursor& versionStart)
 {
   m_versionStart = versionStart;
 }
@@ -677,7 +681,7 @@ YamlDirective::setVersionStart(const QTextCursor& versionStart)
 //=== YamlTagDirective
 //====================================================================
 YamlTagDirective::YamlTagDirective(QObject* parent)
-  : YamlNode(parent)
+  : YamlDirective(parent)
 {
   m_type = TagDirective;
 }
@@ -685,7 +689,7 @@ YamlTagDirective::YamlTagDirective(QObject* parent)
 YamlTagDirective::YamlTagDirective(const QString& handle,
                                    const QString& value,
                                    QObject* parent)
-  : YamlNode(parent)
+  : YamlDirective(parent)
   , m_value(value)
   , m_handle(handle)
 {
@@ -770,6 +774,60 @@ void
 YamlTagDirective::setHandleType(TagHandleType handleType)
 {
   m_handleType = handleType;
+}
+
+//====================================================================
+//=== YamlReserveDirective
+//====================================================================
+YamlReservedDirective::YamlReservedDirective(QObject* parent)
+  : YamlDirective(parent)
+{
+  m_type = ReservedDirective;
+}
+
+QString
+YamlReservedDirective::name() const
+{
+  return m_name;
+}
+
+void
+YamlReservedDirective::setName(const QString& name)
+{
+  m_name = name;
+}
+
+void
+YamlReservedDirective::addParameter(QTextCursor cursor, const QString& param)
+{
+  m_parameters.insert(cursor, param);
+}
+
+QString YamlReservedDirective::parameter(QTextCursor cursor) {
+  return m_parameters.value(cursor, QString());
+}
+
+QMap<QTextCursor, QString> YamlReservedDirective::parameters()
+{
+  return m_parameters;
+}
+
+QTextCursor YamlReservedDirective::nameStart() const
+{
+  return m_nameStart;
+}
+
+void YamlReservedDirective::setNameStart(const QTextCursor &nameStart)
+{
+  m_nameStart = nameStart;
+}
+
+//====================================================================
+//=== YamlDirective
+//====================================================================
+YamlDirective::YamlDirective(QObject* parent)
+  : YamlNode(parent)
+{
 }
 
 //====================================================================

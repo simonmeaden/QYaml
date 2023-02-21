@@ -69,7 +69,7 @@ QYamlDocument::startPos()
 }
 
 void
-QYamlDocument::setStart(QTextCursor position, YamlStart* start)
+QYamlDocument::setStart(QTextCursor position, SharedStart start)
 {
   m_start = position;
   m_implicitStart = false;
@@ -98,7 +98,7 @@ QYamlDocument::endPos()
 }
 
 void
-QYamlDocument::setEnd(QTextCursor mark, YamlEnd* end)
+QYamlDocument::setEnd(QTextCursor mark, SharedEnd end)
 {
   if (end) {
     m_end = end->end();
@@ -146,25 +146,26 @@ QYamlDocument::setExplicitTags(bool ExplicitTags)
   explicitTags = ExplicitTags;
 }
 
-QList<YamlNode*>
+QList<SharedNode>
 QYamlDocument::nodes() const
 {
   return m_data;
 }
 
-YamlNode*
+SharedNode
 QYamlDocument::node(int index)
 {
   return m_data.at(index);
 }
 
-YamlNode *QYamlDocument::node(QTextCursor cursor)
+SharedNode
+QYamlDocument::node(QTextCursor cursor)
 {
   return m_nodes.value(cursor, nullptr);
 }
 
 bool
-QYamlDocument::addNode(YamlNode* data, bool root)
+QYamlDocument::addNode(SharedNode data, bool root)
 {
   switch (data->type()) {
     case YamlNode::Comment:
@@ -183,21 +184,51 @@ QYamlDocument::addNode(YamlNode* data, bool root)
       m_data.append(data);
       if (root)
         m_root.append(data);
-      return addSequenceData(qobject_cast<YamlSequence*>(data));
+      return addSequenceData(qSharedPointerDynamicCast<YamlSequence>(data));
     }
     case YamlNode::Map: {
       m_data.append(data);
       if (root)
         m_root.append(data);
-      return addMapData(qobject_cast<YamlMap*>(data));
+      return addMapData(qSharedPointerDynamicCast<YamlMap>(data));
     }
     default:
       return false;
   }
 }
 
+void
+QYamlDocument::addDirective(SharedNode directive)
+{
+  auto yaml = qSharedPointerDynamicCast<YamlYamlDirective>(directive);
+  if (yaml) {
+    if (m_yaml.isEmpty()) {
+      //      directive->setError(YamlError::TooManyYamlDirectivesError, true);
+      //    } else {
+      m_directive = yaml;
+    }
+    m_yaml.insert(directive->start(), yaml);
+    m_nodes.insert(directive->start(), yaml);
+    m_data.append(yaml);
+    return;
+  }
+  auto tag = qSharedPointerDynamicCast<YamlTagDirective>(directive);
+  if (tag) {
+    m_tags.insert(tag->start(), tag);
+    m_nodes.insert(tag->start(), tag);
+    m_data.append(tag);
+  }
+  auto reserved = qSharedPointerDynamicCast<YamlReservedDirective>(directive);
+  if (reserved) {
+    m_reserved.insert(reserved->start(), reserved);
+    m_nodes.insert(reserved->start(), reserved);
+    m_data.append(reserved);
+  }
+}
+
 bool
-QYamlDocument::addSequenceData(YamlSequence* sequence, YamlMapItem* item)
+QYamlDocument::addSequenceData(QSharedPointer<YamlSequence> sequence,
+                               QSharedPointer<YamlMapItem> item)
 {
   if (item) // sub sequence in map
     m_nodes.insert(item->start(), item);
@@ -205,7 +236,7 @@ QYamlDocument::addSequenceData(YamlSequence* sequence, YamlMapItem* item)
     m_nodes.insert(sequence->start(), sequence);
 
   for (auto data : sequence->data()) {
-    if (data){
+    if (data) {
       switch (data->type()) {
         case YamlNode::Comment:
           //        m_nodes.insert(data->start(), data);
@@ -229,7 +260,8 @@ QYamlDocument::addSequenceData(YamlSequence* sequence, YamlMapItem* item)
 }
 
 bool
-QYamlDocument::addMapData(YamlMap* map, YamlMapItem* item)
+QYamlDocument::addMapData(QSharedPointer<YamlMap> map,
+                          QSharedPointer<YamlMapItem> item)
 {
   if (item) // sub map in map
     m_nodes.insert(item->start(), item);
@@ -272,7 +304,7 @@ QYamlDocument::addMapData(YamlMap* map, YamlMapItem* item)
 }
 
 bool
-QYamlDocument::addMapItemData(YamlMapItem* item)
+QYamlDocument::addMapItemData(QSharedPointer<YamlMapItem> item)
 {
   if (item) {
     auto data = item->data();
@@ -335,20 +367,20 @@ QYamlDocument::setWarnings(const YamlWarnings& newWarnings)
   m_warnings = newWarnings;
 }
 
-const QMap<QTextCursor, YamlNode*>&
+const QMap<QTextCursor, SharedNode>&
 QYamlDocument::nodeMap() const
 {
   return m_nodes;
 }
 
-QMap<QTextCursor, YamlTagDirective*>
+QMap<QTextCursor, SharedTagDirective>
 QYamlDocument::tags() const
 {
   return m_tags;
 }
 
 void
-QYamlDocument::setTags(const QMap<QTextCursor, YamlTagDirective*>& tags)
+QYamlDocument::setTags(const QMap<QTextCursor, SharedTagDirective>& tags)
 {
   m_tags = tags;
   for (auto [key, tag] : asKeyValueRange(tags)) {
@@ -358,7 +390,7 @@ QYamlDocument::setTags(const QMap<QTextCursor, YamlTagDirective*>& tags)
 }
 
 void
-QYamlDocument::addTag(YamlTagDirective* tag)
+QYamlDocument::addTag(SharedTagDirective tag)
 {
   m_tags.insert(tag->start(), tag);
   m_root.append(tag);
@@ -378,7 +410,27 @@ QYamlDocument::removeTag(QTextCursor position)
   m_tags.remove(position);
 }
 
-YamlDirective*
+QMap<QTextCursor, SharedReservedDirective> QYamlDocument::reserved() const
+{
+  return m_reserved;
+}
+
+void QYamlDocument::addReserved(const QMap<QTextCursor, SharedReservedDirective> &reserved)
+{
+  m_reserved = reserved;
+}
+
+bool QYamlDocument::hasReserved()
+{
+  return !m_reserved.isEmpty();
+}
+
+void QYamlDocument::removeReserved(QTextCursor position)
+{
+  m_reserved.remove(position);
+}
+
+SharedYamlDirective
 QYamlDocument::getDirective() const
 {
   return m_directive;
@@ -391,7 +443,7 @@ QYamlDocument::hasDirective()
 }
 
 void
-QYamlDocument::setDirective(YamlDirective* directive)
+QYamlDocument::setDirective(SharedYamlDirective directive)
 {
   this->m_directive = directive;
   m_root.append(directive);

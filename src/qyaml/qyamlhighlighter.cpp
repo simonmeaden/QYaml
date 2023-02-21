@@ -3,8 +3,8 @@
 #include "qyaml/qyamledit.h"
 #include "qyaml/qyamlparser.h"
 #include "qyaml/yamlnode.h"
-#include "utilities/x11colors.h"
 #include "utilities/ContainerUtil.h"
+#include "utilities/x11colors.h"
 
 QYamlHighlighter::QYamlHighlighter(QYamlParser* parser, QYamlEdit* parent)
   : QSyntaxHighlighter{ parent->document() }
@@ -19,11 +19,12 @@ QYamlHighlighter::QYamlHighlighter(QYamlParser* parser, QYamlEdit* parent)
   , m_commentColor(QColorConstants::X11::ForestGreen)
   , m_scalarColor(QColorConstants::X11::MediumSeaGreen)
   , m_directiveColor(QColorConstants::X11::peru)
-  , m_tagColor(QColorConstants::X11::purple)
+  , m_tagColor(QColorConstants::X11::peru)
+  , m_reservedColor(QColorConstants::X11::peru)
   , m_docStartColor(QColorConstants::X11::MediumBlue)
-  , m_docEndColor(QColorConstants::X11::MediumBlue)
+  , m_docEndColor(QColorConstants::X11::LightBlue1)
   , m_errorColor(QColorConstants::X11::red)
-  , m_warningColor(QColorConstants::X11::yellow)
+  , m_warningColor(QColorConstants::X11::orange)
 {
   m_textFormat.setBackground(m_backgroundColor);
   m_textFormat.setForeground(m_textColor);
@@ -43,12 +44,16 @@ QYamlHighlighter::QYamlHighlighter(QYamlParser* parser, QYamlEdit* parent)
   m_scalarFormat.setForeground(m_scalarColor);
   m_tagFormat.setBackground(m_backgroundColor);
   m_tagFormat.setForeground(m_tagColor);
+  m_reservedFormat.setBackground(m_backgroundColor);
+  m_reservedFormat.setForeground(m_reservedColor);
   m_directiveFormat.setBackground(m_backgroundColor);
   m_directiveFormat.setForeground(m_directiveColor);
   m_docStartFormat.setBackground(m_backgroundColor);
   m_docStartFormat.setForeground(m_docStartColor);
   m_docEndFormat.setBackground(m_backgroundColor);
   m_docEndFormat.setForeground(m_docEndColor);
+  m_warningFormat.setBackground(m_warningColor);
+  m_warningFormat.setForeground(m_backgroundColor);
 }
 
 void
@@ -75,7 +80,7 @@ QYamlHighlighter::highlightBlock(const QString& text)
     if (nodes.isEmpty())
       return;
 
-    for (auto node : nodes) {
+    for (auto& node : nodes) {
       auto nodeStart = node->startPos();
       auto nodeEnd = node->endPos();
 
@@ -91,50 +96,55 @@ QYamlHighlighter::highlightBlock(const QString& text)
 
       switch (node->type()) {
         case YamlNode::Scalar: {
-//          if (node->hasErrors() &&
-//              node->errors().testFlag(YamlError::EmptyFlowValue)) {
-//            setScalarFormat(node, blockStart, text.length());
-//            continue;
-//          }
-          setScalarFormat(node, blockStart, text.length());
+          //          if (node->hasErrors() &&
+          //              node->errors().testFlag(YamlError::EmptyFlowValue)) {
+          //            setScalarFormat(node, blockStart, text.length());
+          //            continue;
+          //          }
+          setScalarFormat(node, blockStart, textLength);
           break;
         }
         case YamlNode::Map: {
-          setMapFormat(node, blockStart, text.length());
+          setMapFormat(node, blockStart, textLength);
           break;
         }
         case YamlNode::MapItem: {
-          auto n = qobject_cast<YamlMapItem*>(node);
-//          auto type = n->data()->type();
+          auto n = qSharedPointerDynamicCast<YamlMapItem>(node);
+          //          auto type = n->data()->type();
           if (n) {
-            setMapItemFormat(n, blockStart, text.length());
+            setMapItemFormat(n, blockStart, textLength);
           }
           break;
         }
         case YamlNode::Sequence: {
-          setSequenceFormat(node, blockStart, text.length());
+          setSequenceFormat(node, blockStart, textLength);
           break;
         }
         case YamlNode::Comment: {
-          setCommentFormat(node, blockStart, text.length());
+          setCommentFormat(node, blockStart, textLength);
           break;
         }
         case YamlNode::YamlDirective: {
-          setDirectiveFormat(node, blockStart, text.length());
+          setDirectiveFormat(node, blockStart, textLength);
           break;
         }
         case YamlNode::TagDirective: {
-          setTagFormat(node, blockStart, text.length());
+          setTagFormat(node, blockStart, textLength);
+          break;
+        }
+        case YamlNode::ReservedDirective: {
+          setReservedFormat(node, blockStart, textLength);
           break;
         }
         case YamlNode::Start: {
-          setStartTagFormat(node, blockStart, text.length());
+          setStartTagFormat(node, blockStart, textLength);
           break;
         }
         case YamlNode::End: {
-          setEndTagFormat(node, blockStart, text.length());
+          setEndTagFormat(node, blockStart, textLength);
           break;
         }
+        case YamlNode::Directive:
         case YamlNode::Undefined:
           // never happen
           break;
@@ -143,8 +153,20 @@ QYamlHighlighter::highlightBlock(const QString& text)
   }
 }
 
+QColor
+QYamlHighlighter::reservedColor() const
+{
+  return m_reservedColor;
+}
+
 void
-QYamlHighlighter::setScalarFormat(YamlNode* node,
+QYamlHighlighter::setReservedColor(const QColor& reservedColor)
+{
+  m_reservedColor = reservedColor;
+}
+
+void
+QYamlHighlighter::setScalarFormat(SharedNode node,
                                   int blockStart,
                                   int textLength)
 {
@@ -183,16 +205,16 @@ QYamlHighlighter::setScalarFormat(YamlNode* node,
 }
 
 void
-QYamlHighlighter::setKeyFormat(YamlMapItem* node,
+QYamlHighlighter::setKeyFormat(QSharedPointer<YamlMapItem> node,
                                int blockStart,
-                               int textLength)
+                               int nodeLength)
 {
   FormatSize formatable;
   if (node) {
     if (isFormatable(node->startPos(),
                      node->keyLength(),
                      blockStart,
-                     textLength,
+                     nodeLength,
                      formatable)) {
       setFormat(formatable.start, formatable.length, m_mapKeyFormat);
     }
@@ -200,7 +222,7 @@ QYamlHighlighter::setKeyFormat(YamlMapItem* node,
 }
 
 void
-QYamlHighlighter::setCommentFormat(YamlNode* node,
+QYamlHighlighter::setCommentFormat(SharedNode node,
                                    int blockStart,
                                    int textLength)
 {
@@ -209,41 +231,103 @@ QYamlHighlighter::setCommentFormat(YamlNode* node,
   if (n) {
     if (isFormatable(
           n->startPos(), n->length(), blockStart, textLength, formatable)) {
-      setFormat(formatable.start, formatable.length, m_commentFormat);
+      if (n->warnings().testFlag(YamlWarning::InvalidSpaceWarning) ||
+          n->warnings().testFlag(YamlWarning::IllegalCommentPosition) ||
+          n->warnings().testFlag(
+            YamlWarning::InvalidMinorVersionWarning)) { // errors override
+                                                        // warnings
+        m_commentFormat.setUnderlineColor(m_warningColor);
+        m_commentFormat.setUnderlineStyle(QTextCharFormat::WaveUnderline);
+        setFormat(formatable.start, formatable.length, m_commentFormat);
+        m_commentFormat.setUnderlineStyle(QTextCharFormat::NoUnderline);
+        m_commentFormat.setUnderlineColor(m_backgroundColor);
+      } else {
+        setFormat(formatable.start, formatable.length, m_commentFormat);
+      }
     }
   }
 }
 
 void
-QYamlHighlighter::setDirectiveFormat(YamlNode* node,
+QYamlHighlighter::setDirectiveFormat(SharedNode node,
                                      int blockStart,
                                      int textLength)
 {
   FormatSize formatable;
-  auto n = qobject_cast<YamlDirective*>(node);
+  auto n = qobject_cast<YamlYamlDirective*>(node);
   if (n) {
     if (isFormatable(
           n->startPos(), n->length(), blockStart, textLength, formatable)) {
-      setFormat(formatable.start, formatable.length, m_directiveFormat);
+      if (n->errors().testFlag(YamlError::TooManyYamlDirectivesError)) {
+        m_directiveFormat.setUnderlineColor(m_errorColor);
+        m_directiveFormat.setUnderlineStyle(QTextCharFormat::WaveUnderline);
+        setFormat(formatable.start, formatable.length, m_directiveFormat);
+        m_directiveFormat.setUnderlineStyle(QTextCharFormat::NoUnderline);
+        m_directiveFormat.setUnderlineColor(m_backgroundColor);
+      } else if (n->warnings().testFlag(YamlWarning::InvalidSpaceWarning) ||
+                 n->warnings().testFlag(
+                   YamlWarning::
+                     InvalidMinorVersionWarning)) { // errors override warnings
+        m_directiveFormat.setUnderlineColor(m_warningColor);
+        m_directiveFormat.setUnderlineStyle(QTextCharFormat::WaveUnderline);
+        setFormat(formatable.start, formatable.length, m_tagFormat);
+        m_directiveFormat.setUnderlineStyle(QTextCharFormat::NoUnderline);
+        m_directiveFormat.setUnderlineColor(m_backgroundColor);
+      } else {
+        setFormat(formatable.start, formatable.length, m_directiveFormat);
+      }
     }
   }
 }
 
 void
-QYamlHighlighter::setTagFormat(YamlNode* node, int blockStart, int textLength)
+QYamlHighlighter::setTagFormat(SharedNode node, int blockStart, int textLength)
 {
   FormatSize formatable;
   auto n = qobject_cast<YamlTagDirective*>(node);
   if (n) {
     if (isFormatable(
           n->startPos(), n->length(), blockStart, textLength, formatable)) {
-      setFormat(formatable.start, formatable.length, m_tagFormat);
+      if (n->warnings().testFlag(InvalidSpaceWarning) ||
+          n->warnings().testFlag(YamlWarning::IllegalCommentPosition)) {
+        m_tagFormat.setUnderlineColor(m_warningColor);
+        m_tagFormat.setUnderlineStyle(QTextCharFormat::WaveUnderline);
+        setFormat(formatable.start, formatable.length, m_tagFormat);
+        m_tagFormat.setUnderlineStyle(QTextCharFormat::NoUnderline);
+        m_tagFormat.setUnderlineColor(m_backgroundColor);
+      } else {
+        setFormat(formatable.start, formatable.length, m_tagFormat);
+      }
     }
   }
 }
 
 void
-QYamlHighlighter::setStartTagFormat(YamlNode* node,
+QYamlHighlighter::setReservedFormat(SharedNode node,
+                                    int blockStart,
+                                    int textLength)
+{
+  FormatSize formatable;
+  auto n = qobject_cast<YamlReservedDirective*>(node);
+  if (n) {
+    if (isFormatable(
+          n->startPos(), n->length(), blockStart, textLength, formatable)) {
+      if (n->warnings().testFlag(ReservedDirectiveWarning) ||
+          n->warnings().testFlag(InvalidSpaceWarning)) {
+        m_reservedFormat.setUnderlineColor(m_warningColor);
+        m_reservedFormat.setUnderlineStyle(QTextCharFormat::WaveUnderline);
+        setFormat(formatable.start, formatable.length, m_reservedFormat);
+        m_reservedFormat.setUnderlineStyle(QTextCharFormat::NoUnderline);
+        m_reservedFormat.setUnderlineColor(m_backgroundColor);
+      } else {
+        setFormat(formatable.start, formatable.length, m_reservedFormat);
+      }
+    }
+  }
+}
+
+void
+QYamlHighlighter::setStartTagFormat(SharedNode node,
                                     int blockStart,
                                     int textLength)
 {
@@ -258,7 +342,7 @@ QYamlHighlighter::setStartTagFormat(YamlNode* node,
 }
 
 void
-QYamlHighlighter::setEndTagFormat(YamlNode* node,
+QYamlHighlighter::setEndTagFormat(SharedNode node,
                                   int blockStart,
                                   int textLength)
 {
@@ -273,7 +357,7 @@ QYamlHighlighter::setEndTagFormat(YamlNode* node,
 }
 
 void
-QYamlHighlighter::setMapFormat(YamlNode* node, int blockStart, int textLength)
+QYamlHighlighter::setMapFormat(SharedNode node, int blockStart, int textLength)
 {
 
   auto n = qobject_cast<YamlMap*>(node);
@@ -300,7 +384,7 @@ QYamlHighlighter::setMapFormat(YamlNode* node, int blockStart, int textLength)
 }
 
 void
-QYamlHighlighter::setMapItemFormat(YamlMapItem* node,
+QYamlHighlighter::setMapItemFormat(QSharedPointer<YamlMapItem> node,
                                    int blockStart,
                                    int textLength)
 {
@@ -318,7 +402,8 @@ QYamlHighlighter::setMapItemFormat(YamlMapItem* node,
         break;
       }
       case YamlNode::MapItem: { // should never happen
-        setMapItemFormat(qobject_cast<YamlMapItem*>(n), blockStart, textLength);
+        setMapItemFormat(
+          qSharedPointerDynamicCast<YamlMapItem>(n), blockStart, textLength);
         break;
       }
       case YamlNode::Sequence: {
@@ -337,7 +422,7 @@ QYamlHighlighter::setMapItemFormat(YamlMapItem* node,
 }
 
 void
-QYamlHighlighter::setSequenceFormat(YamlNode* node,
+QYamlHighlighter::setSequenceFormat(SharedNode node,
                                     int blockStart,
                                     int textLength)
 {
@@ -362,7 +447,7 @@ QYamlHighlighter::setSequenceFormat(YamlNode* node,
       default:
         break;
     }
-    for (auto child : n->data()) {
+    for (auto& child : n->data()) {
       if (child) {
         switch (child->type()) {
           case YamlNode::Scalar: {
@@ -562,22 +647,26 @@ QYamlHighlighter::setTagColor(const QColor& tagColor)
   m_tagColor = tagColor;
 }
 
-QColor QYamlHighlighter::warningColor() const
+QColor
+QYamlHighlighter::warningColor() const
 {
   return m_warningColor;
 }
 
-void QYamlHighlighter::setWarningColor(const QColor &warningColor)
+void
+QYamlHighlighter::setWarningColor(const QColor& warningColor)
 {
   m_warningColor = warningColor;
 }
 
-QColor QYamlHighlighter::errorColor() const
+QColor
+QYamlHighlighter::errorColor() const
 {
   return m_errorColor;
 }
 
-void QYamlHighlighter::setErrorColor(const QColor &errorColor)
+void
+QYamlHighlighter::setErrorColor(const QColor& errorColor)
 {
   m_errorColor = errorColor;
 }

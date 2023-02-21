@@ -74,6 +74,48 @@ QYamlParser::getInitialSpaces(const QString& text,
   return -1;
 }
 
+void
+QYamlParser::createDocIfNull(int start, SharedDocument& currentDoc)
+{
+  if (!currentDoc) {
+    currentDoc = SharedDocument(new QYamlDocument());
+    currentDoc->setStart(createCursor(start));
+  }
+}
+
+// SharedComment
+// QYamlParser::storeCommentIfExists(SharedDocument currentDoc,
+//                                   QString comment,
+//                                   int& start)
+//{
+//   if (!comment.isEmpty()) {
+//     auto yamlcomment = SharedComment(new YamlComment(comment, this));
+//     yamlcomment->setStart(createCursor(start));
+//     start += comment.length();
+//     yamlcomment->setEnd(createCursor(start));
+//     start++; // newline
+//     currentDoc->addNode(yamlcomment);
+//     comment.clear();
+//     return yamlcomment;
+//   }
+//   return nullptr;
+// }
+
+void
+QYamlParser::storeNode(SharedDocument currentDoc,
+                       SharedNode node,
+                       int& start,
+                       int length)
+{
+  if (node) {
+    node->setStart(createCursor(start));
+    start += length;
+    node->setEnd(createCursor(start));
+    start++;
+    currentDoc->addNode(node);
+  }
+}
+
 bool
 QYamlParser::parse(const QString& text, int startPos, int length)
 {
@@ -82,203 +124,78 @@ QYamlParser::parse(const QString& text, int startPos, int length)
   c_printable(Characters::NW_ARROW_BAR);
 
   auto row = 0;
-  auto start = startPos;
-  QString t;
-  auto tStart = -1;
+  auto pos = startPos;
   auto indent = 0;
   auto rowStart = 0;
-  auto pos = 0;
-  YamlNode* node = nullptr;
+  SharedNode node = nullptr;
   auto isTagStart = false;
   auto isAnchorStart = false;
   auto isLinkStart = false;
   auto isHyphen = false;
   auto isIndentComplete = false;
-  //  QTextCursor cursor;
   auto hasYamlDirective = false;
-  QList<YamlNode*> nodes;
-  QList<YamlNode*> rootNodes;
-  QString key;
-  int keyStart = -1;
+  SharedDocument currentDoc = nullptr;
+  bool directivesEnd = false;
 
-  //  for (auto i = start; i < text.size(); i++) {
-  //    auto c = text.at(i);
+  SharedNode sharednode = nullptr;
+  SharedComment sharedcomment = nullptr;
+
   auto lines = text.split(Characters::NEWLINE);
-  for (auto line : lines) {
-    auto indent = s_indent(line);
-    //    if (c == Characters::NEWLINE) {
-    //      // get leading spaces.
-    //      if (indent > 0) {
-    //        // TODO scalar??
-    //      }
-    //      indent = getInitialSpaces(text, 0, i, c);
-    //      i--; // reposition index.
-    //      t.clear();
-    //      continue;
-    //    } else if (c.isSpace()) {
-    //      if (!isIndentComplete) {
-    //        indent++;
-    //        continue;
-    //      }
-    //      t += c;
-    //      continue;
-    //    } else
-    YamlDirective* yamlDirective = nullptr;
-    YamlTagDirective* tagDirective = nullptr;
-    if (ns_yaml_directive(line, indent, yamlDirective)) {
-      if (yamlDirective) {
-        nodes.append(yamlDirective);
-        rootNodes.append(yamlDirective);
+  for (auto& line : lines) {
+    createDocIfNull(pos, currentDoc);
+    if (l_directive(line, pos, sharednode, sharedcomment)) {
+      // TODO error no directives after directives end
+      if (sharednode) {
+        if (sharednode->type() == YamlNode::YamlDirective) {
+          if (hasYamlDirective) {
+            sharednode->setError(YamlError::TooManyYamlDirectivesError, true);
+          }
+          hasYamlDirective = true;
+        }
+        currentDoc->addDirective(sharednode);
+        sharednode = nullptr;
       }
-      //      int start = i;
-      //      auto tag = lookahead(i, text);
-      //      if (tag.startsWith("%YAML")) {
-      //        auto directive = ns_yaml_directive(tag, start);
-      //        if (directive) {
-      //          nodes.append(directive);
-      //          rootNodes.append(directive);
-      //        }
-      //      } else if (tag.startsWith("%TAG")) {
-      //        auto directive = ns_tag_directive(tag, start);
-      //        if (directive) {
-      //          nodes.append(directive);
-      //          rootNodes.append(directive);
-      //        }
-      //      }
-    }
-    if (ns_tag_directive(line, indent, tagDirective)) {
-      if (tagDirective){
-        nodes.append(yamlDirective);
-        rootNodes.append(yamlDirective);
+      if (sharedcomment) {
+        currentDoc->addNode(sharedcomment);
       }
+      continue;
     }
-//    if (c == Characters::MINUS) {
-//      auto start = i;
 
-//      t += c;
-//      if (!getNextChar(c, text, i)) {
-//        // TODO NOT A TAG DIRECTIVE carry on with something
-//        // else.
-//        continue;
-//      } else if (c == Characters::MINUS) {
-//        t += c;
-//        if (!getNextChar(c, text, i)) {
-//          // TODO NOT A TAG DIRECTIVE carry on with something
-//          // else.
-//          continue;
-//        } else if (c == Characters::MINUS) {
-//          t += c;
-//          if (indent == 0) {
-//            auto startNode = new YamlStart(this);
-//            startNode->setStart(createCursor(start));
-//            startNode->setEnd(createCursor(start + t.length()));
-//            //          if (!doc->hasDirective() || !doc->hasTag()) {
-//            //            doc->setStart(startNode->start());
-//            //          }
-//            nodes.append(startNode);
-//            rootNodes.append(startNode);
-//          } else {
-//            // TODO this will be inside a scalar string
-//            continue;
-//          }
-//          t.clear();
-//        }
-//      }
-//    } else if (c == Characters::POINT) {
-//      auto start = i;
-//      t += c;
-//      if (!getNextChar(c, text, i)) {
-//        // TODO NOT A TAG DIRECTIVE carry on with something
-//        // else.
-//        continue;
-//      } else if (c == Characters::POINT) {
-//        t += c;
-//        if (!getNextChar(c, text, i)) {
-//          // TODO NOT A TAG DIRECTIVE carry on with something
-//          // else.
-//          continue;
-//        } else if (c == Characters::POINT) {
-//          t += c;
-//          if (indent == 0) {
-//            auto endNode = new YamlEnd(this);
-//            endNode->setStart(createCursor(start));
-//            endNode->setEnd(createCursor(start + t.length()));
-//            //          if (!doc->hasDirective() || !doc->hasTag()) {
-//            //            doc->setEnd(endNode->end());
-//            //          }
-//            nodes.append(endNode);
-//            rootNodes.append(endNode);
-//          } else {
-//            // TODO this will be inside a scalar string
-//            continue;
-//          }
-//          t.clear();
-//        }
-//      }
-//    } else if () {
+    if (s_l_comments(line, pos, sharedcomment)) {
+      if (sharedcomment) {
+        currentDoc->addNode(sharedcomment);
+      }
+      continue;
+    }
 
-//    } else if (c == Characters::VERTICAL_LINE) { // comments
-//      qWarning();
-//      continue;
-//    } else if (c == Characters::COLON) { // start map item
-//      if (!t.isEmpty()) {
-//        key = t;
-//        keyStart = i - key.length();
-//        t.clear();
-//      }
-//      qWarning();
-//    } else if (c == Characters::OPEN_CURLY_BRACKET) { // start map flow
-//      auto map = new YamlMap(this);
-//      map->setStart(createCursor(i));
-//      map->setFlowType(YamlNode::Flow);
-//      parseFlowMap(map, ++i, text);
-//      //      doc->addData(map);
-//      nodes.append(map);
-//      rootNodes.append(map);
-//    } else if (c == Characters::CLOSE_CURLY_BRACKET) { // end map flow
-//      // should happen in parseFlowMap
-//      // TODO error ?
-//      qWarning();
-//    } else if (c == Characters::OPEN_SQUARE_BRACKET) { // start sequence flow
-//      auto sequence = new YamlSequence(this);
-//      sequence->setStart(createCursor(i));
-//      sequence->setFlowType(YamlNode::Flow);
-//      parseFlowSequence(sequence, ++i, text);
-//      //      doc->addData(sequence);
-//      nodes.append(sequence);
-//      rootNodes.append(sequence);
-//    } else if (c == Characters::CLOSE_SQUARE_BRACKET) { // end sequence flow
-//      // should happen in parseFlowSequence.
-//      // TODO error ?
-//      qWarning();
-//    } else if (c == '-') {
-//      if (!isHyphen) {
-//        isHyphen = true;
-//        tStart = i;
-//      }
-//      t += c;
-//      continue;
-//    } else if (c == Characters::STOP) {
-//      t += c;
-//      //      } else if (c == Characters::PERCENT) {
-//      //        isTagStart = true;
-//      //        tStart = i;
-//      //        t += c;
-//    } else if (c == Characters::AMPERSAND) {
-//      isAnchorStart = true;
-//    } else if (c == Characters::ASTERISK) {
-//      isLinkStart = true;
-//    } else {
-//      t += c;
-//      if (!isIndentComplete) {
-//        isIndentComplete = true;
-//      }
-//      continue;
-//    }
+    if (c_directives_end(line, pos, sharednode)) { // ---
+      if (sharednode) {
+        currentDoc->addNode(sharednode, true);
+        sharednode = nullptr;
+        directivesEnd = true;
+      }
+      continue;
+    }
+
+    if (l_document_suffix(
+          line, pos, sharednode, sharedcomment)) { //... plus optional comment
+      if (sharednode) {
+        currentDoc->addNode(sharednode, true);
+        sharednode = nullptr;
+        if (sharedcomment) {
+          currentDoc->addNode(sharedcomment);
+        }
+        currentDoc->setEnd(createCursor(pos));
+        m_documents.append(currentDoc);
+        currentDoc = nullptr;
+        directivesEnd = false; // directives can start again.
+      }
+      continue;
+    }
   }
 
-  // build the documents.
-  buildDocuments(text, nodes, rootNodes);
+  if (currentDoc)
+    m_documents.append(currentDoc);
 
   if (resolveAnchors()) {
     // TODO errors
@@ -289,408 +206,643 @@ QYamlParser::parse(const QString& text, int startPos, int length)
   return true;
 }
 
-void
-QYamlParser::buildDocuments(const QString& text,
-                            QList<YamlNode*> nodes,
-                            QList<YamlNode*> rootNodes)
-{
-  QYamlDocument* doc = nullptr;
-  auto docStarted = false;
+// void
+// QYamlParser::buildDocuments(const QString& text,
+//                             QList<SharedNode> nodes,
+//                             QList<SharedNode> rootNodes)
+//{
+//   SharedDocument doc = nullptr;
+//   auto docStarted = false;
 
-  for (int i = 0; i < nodes.size(); i++) {
-    auto node = nodes.at(i);
-    auto type = node->type();
-    if (!doc) {
-      doc = new QYamlDocument(this);
-      m_documents.append(doc);
-    }
+//  for (int i = 0; i < nodes.size(); i++) {
+//    auto node = nodes.at(i);
+//    auto type = node->type();
+//    if (!doc) {
+//      doc = SharedDocument(new QYamlDocument(this));
+//      m_documents.append(doc);
+//    }
 
-    if (!docStarted) {
-      if (type == YamlNode::YamlDirective) {
-        if (doc->hasDirective()) {
-          // TODO error - there must be two in this document
-          // should't happen here - new document.
-          node->setError(YamlError::TooManyYamlDirectivesError, true);
-        }
-        doc->setDirective(qobject_cast<YamlDirective*>(node));
-        // if the document has a %YAML directive then set start to it's start.
-        doc->setStart(node->start());
-        continue;
-      }
-    } else {
-      if (type == YamlNode::YamlDirective) {
-        // this is either a new document or an error
-        // TODO handle error
-        if (doc->hasDirective()) {
-          // TODO error - there must be two in this document
-          node->setError(YamlError::TooManyYamlDirectivesError, true);
-        }
-        i--; // step back before directive.
-        if (!doc->hasEnd()) {
-          // create end position but no node.
-          doc->setEnd(createCursor(node->startPos() - 1));
-        }
-        doc = nullptr;
-        docStarted = false;
-        continue;
-      }
-    }
+//    if (!docStarted) {
+//      if (type == YamlNode::YamlDirective) {
+//        if (doc->hasDirective()) {
+//          // TODO error - there must be two in this document
+//          // should't happen here - new document.
+//          node->setError(YamlError::TooManyYamlDirectivesError, true);
+//        }
+//        doc->setDirective(qSharedPointerDynamicCast<YamlYamlDirective>(node));
+//        // if the document has a %YAML directive then set start to it's start.
+//        doc->setStart(node->start());
+//        continue;
+//      }
+//    } else {
+//      if (type == YamlNode::YamlDirective) {
+//        // this is either a new document or an error
+//        // TODO handle error
+//        if (doc->hasDirective()) {
+//          // TODO error - there must be two in this document
+//          node->setError(YamlError::TooManyYamlDirectivesError, true);
+//        }
+//        i--; // step back before directive.
+//        if (!doc->hasEnd()) {
+//          // create end position but no node.
+//          doc->setEnd(createCursor(node->startPos() - 1));
+//        }
+//        doc = nullptr;
+//        docStarted = false;
+//        continue;
+//      }
+//    }
 
-    if (!docStarted) {
-      if (type == YamlNode::TagDirective) {
-        doc->addTag(qobject_cast<YamlTagDirective*>(node));
-        if (!doc->hasDirective() && !doc->hasTag()) {
-          // if the document has no %YAML directive then set start to
-          // the first tag directives start.
-          doc->setStart(node->start());
-        }
-        continue;
-      }
-    } else {
-      if (type == YamlNode::TagDirective) {
-        // this is either a new document or an error
-        // TODO handle error
-        i--; // step back before directive.
-        if (!doc->hasEnd()) {
-          // create end position but no node.
-          doc->setEnd(createCursor(node->startPos() - 1));
-        }
-        doc = nullptr;
-        docStarted = false;
-        continue;
-      }
-    }
+//    if (!docStarted) {
+//      if (type == YamlNode::TagDirective) {
+//        doc->addTag(qobject_cast<YamlTagDirective*>(node));
+//        if (!doc->hasDirective() && !doc->hasTag()) {
+//          // if the document has no %YAML directive then set start to
+//          // the first tag directives start.
+//          doc->setStart(node->start());
+//        }
+//        continue;start
+//      }
+//    } else {
+//      if (type == YamlNode::TagDirective) {
+//        // this is either a new document or an error
+//        // TODO handle error
+//        i--; // step back before directive.
+//        if (!doc->hasEnd()) {
+//          // create end position but no node.
+//          doc->setEnd(createCursor(node->startPos() - 1));
+//        }
+//        doc = nullptr;
+//        docStarted = false;
+//        continue;
+//      }
+//    }
 
-    if (!docStarted) {
-      if (type == YamlNode::Start) {
-        if (doc->hasStart()) {
-          doc->setStart(doc->start(), qobject_cast<YamlStart*>(node));
-        } else {
-          doc->setStart(node->start(), qobject_cast<YamlStart*>(node));
-        }
-        docStarted = true;
-      } else {
-        if (type == YamlNode::End) {
-          // TODO error??
-        } else if (!(type == YamlNode::YamlDirective ||
-                     type == YamlNode::TagDirective)) {
-          doc->addNode(node, rootNodes.contains(node));
-        }
-      }
-      continue;
-    }
+//    if (!docStarted) {
+//      if (type == YamlNode::Start) {
+//        if (doc->hasStart()) {
+//          doc->setStart(doc->start(), qobject_cast<YamlStart*>(node));
+//        } else {
+//          doc->setStart(node->start(), qobject_cast<YamlStart*>(node));
+//        }
+//        docStarted = true;
+//      } else {
+//        if (type == YamlNode::End) {
+//          // TODO error??
+//        } else if (!(type == YamlNode::YamlDirective ||
+//                     type == YamlNode::TagDirective)) {
+//          doc->addNode(node, rootNodes.contains(node));
+//        }
+//      }
+//      continue;
+//    }
 
-    if (docStarted) {
-      if (type == YamlNode::End) {
-        doc->setEnd(node->end(), qobject_cast<YamlEnd*>(node));
-        doc = nullptr;
-        docStarted = false;
-      } else if (type == YamlNode::Start) {
-        i--; // step back before start.
-        if (!doc->hasEnd()) {
-          // create end position but no node.
-          doc->setEnd(createCursor(node->startPos() - 1));
-        }
-        doc = nullptr;
-        docStarted = false;
-      } else if (!(type == YamlNode::YamlDirective ||
-                   type == YamlNode::TagDirective || type == YamlNode::Start ||
-                   type == YamlNode::End)) {
-        doc->addNode(node, rootNodes.contains(node));
-      }
-    }
-  }
+//    if (docStarted) {
+//      if (type == YamlNode::End) {
+//        doc->setEnd(node->end(), qobject_cast<YamlEnd*>(node));
+//        doc = nullptr;
+//        docStarted = false;
+//      } else if (type == YamlNode::Start) {
+//        i--; // step back before start.
+//        if (!doc->hasEnd()) {
+//          // create end position but no node.
+//          doc->setEnd(createCursor(node->startPos() - 1));
+//        }
+//        doc = nullptr;
+//        docStarted = false;
+//      } else if (!(type == YamlNode::YamlDirective ||
+//                   type == YamlNode::TagDirective || type == YamlNode::Start
+//                   || type == YamlNode::End)) {
+//        doc->addNode(node, rootNodes.contains(node));
+//      }
+//    }
+//  }
 
-  if (doc && !doc->hasEnd()) {
-    doc->setEnd(createCursor(text.length()));
-  }
-}
+//  if (doc && !doc->hasEnd()) {
+//    doc->setEnd(createCursor(text.length()));
+//  }
+//}
 
-void
-QYamlParser::parseFlowSequence(YamlSequence* sequence,
-                               int& i,
-                               const QString& text)
-{
-  QString t;
+// void
+// QYamlParser::parseFlowSequence(SharedSequence sequence,
+//                                int& i,
+//                                const QString& text)
+//{
+//   QString t;
 
-  while (i < text.length()) {
-    auto c = text.at(i);
-    if (c == Characters::COMMA) {
-      if (t.trimmed().isEmpty()) {
-        auto scalar = parseFlowScalar(t, i);
-        sequence->append(scalar);
-        t.clear();
-      } else {
-        auto scalar = parseFlowScalar(t, i);
-        sequence->append(scalar);
-        t.clear();
-      }
-    } else if (c == Characters::OPEN_CURLY_BRACKET) { // start map flow
-      auto subMap = new YamlMap(this);
-      subMap->setStart(createCursor(i));
-      subMap->setFlowType(YamlNode::Flow);
-      parseFlowMap(subMap, ++i, text);
-      sequence->append(subMap);
-      continue;
-    } else if (c == Characters::CLOSE_CURLY_BRACKET) { // end map flow
-      // TODO error?
-      qWarning();
-    } else if (c == Characters::OPEN_SQUARE_BRACKET) {
-      // end sequence flow
-      auto subSequence = new YamlSequence(this);
-      subSequence->setStart(createCursor(i));
-      subSequence->setFlowType(YamlNode::Flow);
-      parseFlowSequence(subSequence, ++i, text);
-      sequence->append(subSequence);
-    } else if (c == Characters::CLOSE_SQUARE_BRACKET) { // end sequence flow
-      sequence->setEnd(createCursor(i));
-      if (!t.isEmpty()) { // only if missing final comma
-        auto scalar = parseFlowScalar(t, i);
-        sequence->append(scalar);
-        t.clear();
-      }
-      i++;
-      return;
-    } else {
-      if (t.isEmpty() && c == Characters::SPACE) {
-        i++;
-        continue;
-      }
-      t += c;
-    }
-    i++;
-  }
-}
+//  while (i < text.length()) {
+//    auto c = text.at(i);
+//    if (c == Characters::COMMA) {
+//      if (t.trimmed().isEmpty()) {
+//        auto scalar = parseFlowScalar(t, i);
+//        sequence->append(scalar);
+//        t.clear();
+//      } else {
+//        auto scalar = parseFlowScalar(t, i);
+//        sequence->append(scalar);
+//        t.clear();
+//      }
+//    } else if (c == Characters::OPEN_CURLY_BRACKET) { // start map flow
+//      auto subMap = QSharedPointer<YamlMap>(new YamlMap(this));
+//      subMap->setStart(createCursor(i));
+//      subMap->setFlowType(YamlNode::Flow);
+//      parseFlowMap(subMap, ++i, text);
+//      sequence->append(subMap);
+//      continue;
+//    } else if (c == Characters::CLOSE_CURLY_BRACKET) { // end map flow
+//      // TODO error?
+//      qWarning();
+//    } else if (c == Characters::OPEN_SQUARE_BRACKET) {
+//      // end sequence flow
+//      auto subSequence = SharedSequence(new YamlSequence(this));
+//      subSequence->setStart(createCursor(i));
+//      subSequence->setFlowType(YamlNode::Flow);
+//      parseFlowSequence(subSequence, ++i, text);
+//      sequence->append(subSequence);
+//    } else if (c == Characters::CLOSE_SQUARE_BRACKET) { // end sequence flow
+//      sequence->setEnd(createCursor(i));
+//      if (!t.isEmpty()) { // only if missing final comma
+//        auto scalar = parseFlowScalar(t, i);
+//        sequence->append(scalar);
+//        t.clear();
+//      }
+//      i++;
+//      return;
+//    } else {
+//      if (t.isEmpty() && c == Characters::SPACE) {
+//        i++;
+//        continue;
+//      }
+//      t += c;
+//    }
+//    i++;
+//  }
+//}
 
-void
-QYamlParser::parseFlowMap(YamlMap* map, int& i, const QString& text)
-{
-  QString t;
-  QString key;
-  int keyStart = -1;
-  bool stringLiteral = false;
-  bool foldedLiteral = false;
+// void
+// QYamlParser::parseFlowMap(QSharedPointer<YamlMap> map,
+//                           int& i,
+//                           const QString& text)
+//{
+//   QString t;
+//   QString key;
+//   int keyStart = -1;
+//   bool stringLiteral = false;
+//   bool foldedLiteral = false;
 
-  while (i < text.length()) {
-    auto c = text.at(i);
-    if (c == Characters::NEWLINE) {
-      if (!t.isEmpty()) {
-        t += Characters::SPACE; // new lines inside strings are ignored.
-      }
-      i++;
-      continue;
-    } else if (c == Characters::COLON) {
-      if (!t.isEmpty()) {
-        key = t;
-        keyStart = i - key.length();
-        t.clear();
-      }
-    } else if (c == Characters::VERTICAL_LINE) {
-      // TODO flow string literal.
-      if (t.isEmpty()) {
-        stringLiteral = true;
-      }
-    } else if (c == Characters::GT) {
-      // TODO flow string literal.
-      if (t.isEmpty()) {
-        foldedLiteral = true;
-      }
-    } else if (c == Characters::COMMA) {
-      // TODO maps & sequences at comma
-      if (!t.isEmpty() && !key.isEmpty()) {
-        auto scalar = parseFlowScalar(t, i);
-        auto item = new YamlMapItem(key, scalar, this);
-        item->setStart(createCursor(keyStart));
-        item->setEnd(scalar->end());
-        map->insert(key, item);
-        t.clear();
-        key.clear();
-        keyStart = -1;
-      }
-    } else if (c == Characters::OPEN_CURLY_BRACKET) { // start sub map flow
-      auto subMap = new YamlMap(this);
-      subMap->setStart(createCursor(i));
-      subMap->setFlowType(YamlNode::Flow);
-      parseFlowMap(subMap, ++i, text);
-      if (!key.isEmpty()) {
-        auto item = new YamlMapItem(key, subMap, this);
-        item->setStart(createCursor(keyStart));
-        item->setEnd(subMap->end());
-        map->insert(key, item);
-        key.clear();
-        keyStart = -1;
-      } else {
-        // TODO error map item has no key.
-      }
-      continue;
-    } else if (c == Characters::CLOSE_CURLY_BRACKET) { // end map flow
-      map->setEnd(createCursor(i));
-      if (!t.isEmpty() && !key.isEmpty()) { // only if missing final comma
-        auto scalar = parseFlowScalar(t, i);
-        auto item = new YamlMapItem(key, scalar, this);
-        item->setStart(createCursor(keyStart));
-        item->setEnd(createCursor(i));
-        map->insert(key, item);
-        t.clear();
-        key.clear();
-        keyStart = -1;
-      }
-      i++;
-      return;
-    } else if (c == Characters::OPEN_SQUARE_BRACKET) { // start sequence flow
-      auto subSequence = new YamlSequence(this);
-      subSequence->setStart(createCursor(i));
-      subSequence->setFlowType(YamlNode::Flow);
-      parseFlowSequence(subSequence, ++i, text);
-      if (!key.isEmpty()) {
-        auto item = new YamlMapItem(key, subSequence, this);
-        item->setStart(createCursor(keyStart));
-        item->setEnd(subSequence->end());
-        map->insert(key, item);
-        key.clear();
-        keyStart = -1;
-      } else {
-        // TODO error map item has no key.
-      }
-      continue;
-    } else if (c == Characters::CLOSE_SQUARE_BRACKET) { // end sequence flow
-      // TODO error
-      qWarning();
-    } else {
-      if (t.isEmpty() && c == Characters::SPACE) {
-        i++;
-        continue;
-      }
-      t += c;
-    }
-    i++;
-  }
-}
+//  while (i < text.length()) {
+//    auto c = text.at(i);
+//    if (c == Characters::NEWLINE) {
+//      if (!t.isEmpty()) {
+//        t += Characters::SPACE; // new lines inside strings are ignored.
+//      }
+//      i++;
+//      continue;
+//    } else if (c == Characters::COLON) {
+//      if (!t.isEmpty()) {
+//        key = t;
+//        keyStart = i - key.length();
+//        t.clear();
+//      }
+//    } else if (c == Characters::VERTICAL_LINE) {
+//      // TODO flow string literal.
+//      if (t.isEmpty()) {
+//        stringLiteral = true;
+//      }
+//    } else if (c == Characters::GT) {
+//      // TODO flow string literal.
+//      if (t.isEmpty()) {
+//        foldedLiteral = true;
+//      }
+//    } else if (c == Characters::COMMA) {
+//      // TODO maps & sequences at comma
+//      if (!t.isEmpty() && !key.isEmpty()) {
+//        auto scalar = parseFlowScalar(t, i);
+//        auto item = QSharedPointer<YamlMapItem>(new YamlMapItem(key, scalar));
+//        item->setStart(createCursor(keyStart));
+//        item->setEnd(scalar->end());
+//        map->insert(key, item);
+//        t.clear();
+//        key.clear();
+//        keyStart = -1;
+//      }
+//    } else if (c == Characters::OPEN_CURLY_BRACKET) { // start sub map flow
+//      auto subMap = QSharedPointer<YamlMap>(new YamlMap());
+//      subMap->setStart(createCursor(i));
+//      subMap->setFlowType(YamlNode::Flow);
+//      parseFlowMap(subMap, ++i, text);
+//      if (!key.isEmpty()) {
+//        auto item = QSharedPointer<YamlMapItem>(new YamlMapItem(key, subMap));
+//        item->setStart(createCursor(keyStart));
+//        item->setEnd(subMap->end());
+//        map->insert(key, item);
+//        key.clear();
+//        keyStart = -1;
+//      } else {
+//        // TODO error map item has no key.
+//      }
+//      continue;
+//    } else if (c == Characters::CLOSE_CURLY_BRACKET) { // end map flow
+//      map->setEnd(createCursor(i));
+//      if (!t.isEmpty() && !key.isEmpty()) { // only if missing final comma
+//        auto scalar = parseFlowScalar(t, i);
+//        auto item = QSharedPointer<YamlMapItem>(new YamlMapItem(key, scalar));
+//        item->setStart(createCursor(keyStart));
+//        item->setEnd(createCursor(i));
+//        map->insert(key, item);
+//        t.clear();
+//        key.clear();
+//        keyStart = -1;
+//      }
+//      i++;
+//      return;
+//    } else if (c == Characters::OPEN_SQUARE_BRACKET) { // start sequence flow
+//      auto subSequence = SharedSequence(new YamlSequence());
+//      subSequence->setStart(createCursor(i));
+//      subSequence->setFlowType(YamlNode::Flow);
+//      parseFlowSequence(subSequence, ++i, text);
+//      if (!key.isEmpty()) {
+//        auto item =
+//          QSharedPointer<YamlMapItem>(new YamlMapItem(key, subSequence));
+//        item->setStart(createCursor(keyStart));
+//        item->setEnd(subSequence->end());
+//        map->insert(key, item);
+//        key.clear();
+//        keyStart = -1;
+//      } else {
+//        // TODO error map item has no key.
+//      }
+//      continue;
+//    } else if (c == Characters::CLOSE_SQUARE_BRACKET) { // end sequence flow
+//      // TODO error
+//      qWarning();
+//    } else {
+//      if (t.isEmpty() && c == Characters::SPACE) {
+//        i++;
+//        continue;
+//      }
+//      t += c;//void
+// QYamlParser::parseFlowMap(QSharedPointer<YamlMap> map,
+//                          int& i,
+//                          const QString& text)
+//{
+//  QString t;
+//  QString key;
+//  int keyStart = -1;
+//  bool stringLiteral = false;
+//  bool foldedLiteral = false;
 
-YamlComment*
-QYamlParser::parseComment(int& i, const QString& text)
-{
-  auto comment = new YamlComment(this);
-  comment->setStart(createCursor(i));
-  // todo set indent
-  ++i;
-  while (i < text.length()) {
-    auto c = text.at(i);
-    if (c == '\n') {
-      comment->append(c);
-      comment->setEnd(createCursor(i));
-      return comment;
-    }
-    comment->append(c);
-    i++;
-  }
-  return nullptr;
-}
+//  while (i < text.length()) {
+//    auto c = text.at(i);
+//    if (c == Characters::NEWLINE) {
+//      if (!t.isEmpty()) {
+//        t += Characters::SPACE; // new lines inside strings are ignored.
+//      }
+//      i++;
+//      continue;
+//    } else if (c == Characters::COLON) {
+//      if (!t.isEmpty()) {
+//        key = t;
+//        keyStart = i - key.length();
+//        t.clear();
+//      }
+//    } else if (c == Characters::VERTICAL_LINE) {
+//      // TODO flow string literal.
+//      if (t.isEmpty()) {
+//        stringLiteral = true;
+//      }
+//    } else if (c == Characters::GT) {
+//      // TODO flow string literal.
+//      if (t.isEmpty()) {
+//        foldedLiteral = true;
+//      }
+//    } else if (c == Characters::COMMA) {
+//      // TODO maps & sequences at comma
+//      if (!t.isEmpty() && !key.isEmpty()) {
+//        auto scalar = parseFlowScalar(t, i);
+//        auto item = QSharedPointer<YamlMapItem>(new YamlMapItem(key, scalar));
+//        item->setStart(createCursor(keyStart));
+//        item->setEnd(scalar->end());
+//        map->insert(key, item);
+//        t.clear();
+//        key.clear();
+//        keyStart = -1;
+//      }
+//    } else if (c == Characters::OPEN_CURLY_BRACKET) { // start sub map flow
+//      auto subMap = QSharedPointer<YamlMap>(new YamlMap());
+//      subMap->setStart(createCursor(i));
+//      subMap->setFlowType(YamlNode::Flow);
+//      parseFlowMap(subMap, ++i, text);
+//      if (!key.isEmpty()) {
+//        auto item = QSharedPointer<YamlMapItem>(new YamlMapItem(key, subMap));
+//        item->setStart(createCursor(keyStart));
+//        item->setEnd(subMap->end());
+//        map->insert(key, item);
+//        key.clear();
+//        keyStart = -1;
+//      } else {
+//        // TODO error map item has no key.
+//      }
+//      continue;
+//    } else if (c == Characters::CLOSE_CURLY_BRACKET) { // end map flow
+//      map->setEnd(createCursor(i));
+//      if (!t.isEmpty() && !key.isEmpty()) { // only if missing final comma
+//        auto scalar = parseFlowScalar(t, i);
+//        auto item = QSharedPointer<YamlMapItem>(new YamlMapItem(key, scalar));
+//        item->setStart(createCursor(keyStart));
+//        item->setEnd(createCursor(i));
+//        map->insert(key, item);
+//        t.clear();
+//        key.clear();
+//        keyStart = -1;
+//      }
+//      i++;
+//      return;
+//    } else if (c == Characters::OPEN_SQUARE_BRACKET) { // start sequence flow
+//      auto subSequence = SharedSequence(new YamlSequence());
+//      subSequence->setStart(createCursor(i));
+//      subSequence->setFlowType(YamlNode::Flow);
+//      parseFlowSequence(subSequence, ++i, text);
+//      if (!key.isEmpty()) {
+//        auto item =
+//          QSharedPointer<YamlMapItem>(new YamlMapItem(key, subSequence));
+//        item->setStart(createCursor(keyStart));
+//        item->setEnd(subSequence->end());
+//        map->insert(key, item);
+//        key.clear();
+//        keyStart = -1;
+//      } else {
+//        // TODO error map item has no key.
+//      }
+//      continue;
+//    } else if (c == Characters::CLOSE_SQUARE_BRACKET) { // end sequence flow
+//      // TODO error
+//      qWarning();
+//    } else {
+//      if (t.isEmpty() && c == Characters::SPACE) {
+//        i++;
+//        continue;
+//      }
+//      t += c;
+//    }
+//    i++;
+//  }
+//}
 
-YamlScalar*
-QYamlParser::parseFlowScalar(const QString& text, int i)
-{
-  auto indent = 0, nl = 0;
-  int textlength = text.length();
-  auto t = text;
-  while (t.startsWith(Characters::NEWLINE)) {
-    nl++;
-    t = t.mid(1);
-  }
-  while (t.at(0).isSpace()) {
-    indent++;
-    t = t.mid(1);
-  }
-  //  t = StringUtil::lTrim(t, indent);
-  auto trimmed = t.trimmed();
+// QSharedPointer<YamlComment>
+// QYamlParser::parseComment(int& i, const QString& text)
+//{
+//   auto comment = QSharedPointer<YamlComment>(new YamlComment());
+//   comment->setStart(createCursor(i));
+//   // todo set indent
+//   ++i;
+//   while (i < text.length()) {
+//     auto c = text.at(i);
+//     if (c == '\n') {
+//       comment->append(c);
+//       comment->setEnd(createCursor(i));
+//       return comment;
+//     }
+//     comment->append(c);
+//     i++;
+//   }
+//   return nullptr;
+// }
 
-  auto firstChar = trimmed.at(0);  // TODO to at when working.
-  auto secondChar = trimmed.at(1); // TODO to at when working.
-  auto start = i - textlength + indent + nl;
-  auto scalar = new YamlScalar(trimmed, this);
-  scalar->setStart(createCursor(start));
-  scalar->setEnd(createCursor(i));
+// QSharedPointer<YamlScalar>
+// QYamlParser::parseFlowScalar(const QString& text, int i)
+//{
+//   auto indent = 0, nl = 0;
+//   int textlength = text.length();
+//   auto t = text;
+//   while (t.startsWith(Characters::NEWLINE)) {
+//     nl++;
+//     t = t.mid(1);
+//   }
+//   while (t.at(0).isSpace()) {
+//     indent++;
+//     t = t.mid(1);
+//   }
+//   //  t = StringUtil::lTrim(t, indent);
+//   auto trimmed = t.trimmed();
 
-  auto splits = trimmed.split(Characters::NEWLINE, Qt::KeepEmptyParts);
-  auto count = 0;
-  QMap<int, YamlWarning> warnings;
-  for (auto i = 0; i < splits.size(); i++) {
-    auto s = splits.at(i);
-    if (s.isEmpty()) {
-      warnings.insert(count, YamlWarning::NoWarnings);
-      count++;
-    }
-    if (i <= splits.size() - 1) {
-      if (s.contains(Characters::HASH)) {
-        warnings.insert(count, YamlWarning::PossibleCommentInScalar);
-      } else {
-        warnings.insert(count, YamlWarning::NoWarnings);
-      }
-      count += s.length();
-    }
-  }
-  for (auto [c, t] : asKeyValueRange(warnings)) {
-    if (t == YamlWarning::NoWarnings) {
-      continue;
-    } else if (t == YamlWarning::PossibleCommentInScalar) {
-      if (t != warnings.last()) {
-        int l = trimmed.indexOf(Characters::HASH, c);
-        scalar->addDodgyChar(createCursor(c + l),
-                             YamlWarning::PossibleCommentInScalar);
-      }
-    }
-  }
+//  auto firstChar = trimmed.at(0);  // TODO to at when working.
+//  auto secondChar = trimmed.at(1); // TODO to at when working.
+//  auto start = i - textlength + indent + nl;
+//  auto scalar = QSharedPointer<YamlScalar>(new YamlScalar(trimmed));
+//  scalar->setStart(createCursor(start));
+//  scalar->setEnd(createCursor(i));
 
-  auto p = 0;
-  while ((p = t.indexOf(Characters::TAB, p)) != -1) {
-    scalar->addDodgyChar(createCursor(i - textlength + indent + nl + p),
-                         YamlWarning::TabCharsDiscouraged);
-    p++;
-  }
+//  auto splits = trimmed.split(Characters::NEWLINE, Qt::KeepEmptyParts);
+//  auto count = 0;
+//  QMap<int, YamlWarning> warnings;
+//  for (auto i = 0; i < splits.size(); i++) {
+//    auto s = splits.at(i);
+//    if (s.isEmpty()) {
+//      warnings.insert(count, YamlWarning::NoWarnings);
+//      count++;
+//    }
+//    if (i <= splits.size() - 1) {
+//      if (s.contains(Characters::HASH)) {
+//        warnings.insert(count, YamlWarning::PossibleCommentInScalar);
+//      } else {
+//        warnings.insert(count, YamlWarning::NoWarnings);
+//      }
+//      count += s.length();
+//    }
+//  }
+//  for (auto [c, t] : asKeyValueRange(warnings)) {
+//    if (t == YamlWarning::NoWarnings) {
+//      continue;
+//    } else if (t == YamlWarning::PossibleCommentInScalar) {
+//      if (t != warnings.last()) {
+//        int l = trimmed.indexOf(Characters::HASH, c);
+//        scalar->addDodgyChar(createCursor(c + l),
+//                             YamlWarning::PossibleCommentInScalar);
+//      }
+//    }
+//  }
 
-  if ((firstChar == Characters::COLON || firstChar == Characters::HASH) &&
-      secondChar.isSpace()) {
-    scalar->setError(YamlError::IllegalFirstCharacter, true);
-  } else if (firstChar == Characters::AMPERSAND ||
-             firstChar == Characters::EXCLAMATIONMARK ||
-             firstChar == Characters::ASTERISK ||
-             firstChar == Characters::VERTICAL_LINE ||
-             firstChar == Characters::GT ||
-             firstChar == Characters::COMMERCIAL_AT ||
-             firstChar == Characters::BACKTICK) {
-    scalar->setError(YamlError::IllegalFirstCharacter, true);
-  } else if (firstChar == Characters::OPEN_CURLY_BRACKET) {
-    // TODO distinguish from start map??
-    qWarning();
-  } else if (firstChar == Characters::OPEN_SQUARE_BRACKET) {
-    // TODO distinguish from start sequence??
-    qWarning();
-  } else if (firstChar == Characters::CLOSE_CURLY_BRACKET) {
-    // TODO distinguish from start map??
-    qWarning();
-  } else if (firstChar == Characters::CLOSE_SQUARE_BRACKET) {
-    // TODO distinguish from start sequence??
-    qWarning();
-  } else if (firstChar == Characters::COMMA) {
-    // TODO distinguish from extra comma??
-    qWarning();
-  } else if (firstChar == Characters::DOUBLEQUOTE) {
-    if (trimmed.endsWith(Characters::DOUBLEQUOTE)) {
-      scalar->setStyle(YamlScalar::DOUBLEQUOTED);
-    } else {
-      scalar->setError(YamlError::IllegalFirstCharacter, true);
-      scalar->setError(YamlError::MissingMatchingQuote, true);
-    }
-  } else if (firstChar == Characters::SINGLEQUOTE) {
-    if (trimmed.endsWith(Characters::SINGLEQUOTE)) {
-      scalar->setStyle(YamlScalar::SINGLEQUOTED);
-    } else {
-      scalar->setError(YamlError::IllegalFirstCharacter, true);
-      scalar->setError(YamlError::MissingMatchingQuote, true);
-    }
-  }
-  return scalar;
-}
+//  auto p = 0;
+//  while ((p = t.indexOf(Characters::TAB, p)) != -1) {
+//    scalar->addDodgyChar(createCursor(i - textlength + indent + nl + p),
+//                         YamlWarning::TabCharsDiscouraged);
+//    p++;
+//  }
+
+//  if ((firstChar == Characters::COLON || firstChar == Characters::HASH) &&
+//      secondChar.isSpace()) {
+//    scalar->setError(YamlError::IllegalFirstCharacter, true);
+//  } else if (firstChar == Characters::AMPERSAND ||
+//             firstChar == Characters::EXCLAMATIONMARK ||
+//             firstChar == Characters::ASTERISK ||
+//             firstChar == Characters::VERTICAL_LINE ||
+//             firstChar == Characters::GT ||
+//             firstChar == Characters::COMMERCIAL_AT ||
+//             firstChar == Characters::BACKTICK) {
+//    scalar->setError(YamlError::IllegalFirstCharacter, true);
+//  } else if (firstChar == Characters::OPEN_CURLY_BRACKET) {
+//    // TODO distinguish from start map??
+//    qWarning();
+//  } else if (firstChar == Characters::OPEN_SQUARE_BRACKET) {
+//    // TODO distinguish from start sequence??
+//    qWarning();
+//  } else if (firstChar == Characters::CLOSE_CURLY_BRACKET) {
+//    // TODO distinguish from start map??
+//    qWarning();
+//  } else if (firstChar == Characters::CLOSE_SQUARE_BRACKET) {
+//    // TODO distinguish from start sequence??
+//    qWarning();
+//  } else if (firstChar == Characters::COMMA) {
+//    // TODO distinguish from extra comma??
+//    qWarning();
+//  } else if (firstChar == Characters::DOUBLEQUOTE) {
+//    if (trimmed.endsWith(Characters::DOUBLEQUOTE)) {
+//      scalar->setStyle(YamlScalar::DOUBLEQUOTED);
+//    } else {
+//      scalar->setError(YamlError::IllegalFirstCharacter, true);
+//      scalar->setError(YamlError::MissingMatchingQuote, true);
+//    }
+//  } else if (firstChar == Characters::SINGLEQUOTE) {
+//    if (trimmed.endsWith(Characters::SINGLEQUOTE)) {
+//      scalar->setStyle(YamlScalar::SINGLEQUOTED);
+//    } else {
+//      scalar->setError(YamlError::IllegalFirstCharacter, true);
+//      scalar->setError(YamlError::MissingMatchingQuote, true);
+//    }
+//  }
+//  return scalar;
+//}
+
+//    }
+//    i++;
+//  }
+//}
+
+// QSharedPointer<YamlComment>
+// QYamlParser::parseComment(int& i, const QString& text)
+//{
+//   auto comment = QSharedPointer<YamlComment>(new YamlComment());
+//   comment->setStart(createCursor(i));
+//   // todo set indent
+//   ++i;
+//   while (i < text.length()) {
+//     auto c = text.at(i);
+//     if (c == '\n') {
+//       comment->append(c);
+//       comment->setEnd(createCursor(i));
+//       return comment;
+//     }
+//     comment->append(c);
+//     i++;
+//   }
+//   return nullptr;
+// }
+
+// QSharedPointer<YamlScalar>
+// QYamlParser::parseFlowScalar(const QString& text, int i)
+//{
+//   auto indent = 0, nl = 0;
+//   int textlength = text.length();
+//   auto t = text;
+//   while (t.startsWith(Characters::NEWLINE)) {
+//     nl++;
+//     t = t.mid(1);
+//   }
+//   while (t.at(0).isSpace()) {
+//     indent++;
+//     t = t.mid(1);
+//   }
+//   //  t = StringUtil::lTrim(t, indent);
+//   auto trimmed = t.trimmed();
+
+//  auto firstChar = trimmed.at(0);  // TODO to at when working.
+//  auto secondChar = trimmed.at(1); // TODO to at when working.
+//  auto start = i - textlength + indent + nl;
+//  auto scalar = QSharedPointer<YamlScalar>(new YamlScalar(trimmed));
+//  scalar->setStart(createCursor(start));
+//  scalar->setEnd(createCursor(i));
+
+//  auto splits = trimmed.split(Characters::NEWLINE, Qt::KeepEmptyParts);
+//  auto count = 0;
+//  QMap<int, YamlWarning> warnings;
+//  for (auto i = 0; i < splits.size(); i++) {
+//    auto s = splits.at(i);
+//    if (s.isEmpty()) {
+//      warnings.insert(count, YamlWarning::NoWarnings);
+//      count++;
+//    }
+//    if (i <= splits.size() - 1) {
+//      if (s.contains(Characters::HASH)) {
+//        warnings.insert(count, YamlWarning::PossibleCommentInScalar);
+//      } else {
+//        warnings.insert(count, YamlWarning::NoWarnings);
+//      }
+//      count += s.length();
+//    }
+//  }
+//  for (auto [c, t] : asKeyValueRange(warnings)) {
+//    if (t == YamlWarning::NoWarnings) {
+//      continue;
+//    } else if (t == YamlWarning::PossibleCommentInScalar) {
+//      if (t != warnings.last()) {
+//        int l = trimmed.indexOf(Characters::HASH, c);
+//        scalar->addDodgyChar(createCursor(c + l),
+//                             YamlWarning::PossibleCommentInScalar);
+//      }
+//    }
+//  }
+
+//  auto p = 0;
+//  while ((p = t.indexOf(Characters::TAB, p)) != -1) {
+//    scalar->addDodgyChar(createCursor(i - textlength + indent + nl + p),
+//                         YamlWarning::TabCharsDiscouraged);
+//    p++;
+//  }
+
+//  if ((firstChar == Characters::COLON || firstChar == Characters::HASH) &&
+//      secondChar.isSpace()) {
+//    scalar->setError(YamlError::IllegalFirstCharacter, true);
+//  } else if (firstChar == Characters::AMPERSAND ||
+//             firstChar == Characters::EXCLAMATIONMARK ||
+//             firstChar == Characters::ASTERISK ||
+//             firstChar == Characters::VERTICAL_LINE ||
+//             firstChar == Characters::GT ||
+//             firstChar == Characters::COMMERCIAL_AT ||
+//             firstChar == Characters::BACKTICK) {
+//    scalar->setError(YamlError::IllegalFirstCharacter, true);
+//  } else if (firstChar == Characters::OPEN_CURLY_BRACKET) {
+//    // TODO distinguish from start map??
+//    qWarning();
+//  } else if (firstChar == Characters::OPEN_SQUARE_BRACKET) {
+//    // TODO distinguish from start sequence??
+//    qWarning();
+//  } else if (firstChar == Characters::CLOSE_CURLY_BRACKET) {
+//    // TODO distinguish from start map??
+//    qWarning();
+//  } else if (firstChar == Characters::CLOSE_SQUARE_BRACKET) {
+//    // TODO distinguish from start sequence??
+//    qWarning();
+//  } else if (firstChar == Characters::COMMA) {
+//    // TODO distinguish from extra comma??
+//    qWarning();
+//  } else if (firstChar == Characters::DOUBLEQUOTE) {
+//    if (trimmed.endsWith(Characters::DOUBLEQUOTE)) {
+//      scalar->setStyle(YamlScalar::DOUBLEQUOTED);
+//    } else {
+//      scalar->setError(YamlError::IllegalFirstCharacter, true);
+//      scalar->setError(YamlError::MissingMatchingQuote, true);
+//    }
+//  } else if (firstChar == Characters::SINGLEQUOTE) {
+//    if (trimmed.endsWith(Characters::SINGLEQUOTE)) {
+//      scalar->setStyle(YamlScalar::SINGLEQUOTED);
+//    } else {
+//      scalar->setError(YamlError::IllegalFirstCharacter, true);
+//      scalar->setError(YamlError::MissingMatchingQuote, true);
+//    }
+//  }
+//  return scalar;
+//}
 
 bool
 QYamlParser::resolveAnchors()
@@ -731,13 +883,13 @@ QYamlParser::loadFromZip(const QString& zipFile, const QString& href)
   return false;
 }
 
-QList<QYamlDocument*>
+QList<SharedDocument>
 QYamlParser::documents() const
 {
   return m_documents;
 }
 
-QYamlDocument*
+SharedDocument
 QYamlParser::document(int index)
 {
   if (index >= 0 && index < count()) {
@@ -753,13 +905,13 @@ QYamlParser::text() const
 }
 
 void
-QYamlParser::setDocuments(QList<QYamlDocument*> root)
+QYamlParser::setDocuments(QList<SharedDocument> root)
 {
   m_documents = root;
 }
 
 void
-QYamlParser::append(QYamlDocument* document)
+QYamlParser::append(SharedDocument document)
 {
   m_documents.append(document);
 }
@@ -770,12 +922,12 @@ QYamlParser::isMultiDocument()
   return (m_documents.size() > 1);
 }
 
-YamlNode*
+SharedNode
 QYamlParser::nodeAt(QTextCursor cursor)
 {
   for (auto doc : m_documents) {
     for (auto node : doc->nodes()) {
-      YamlNode* n;
+      SharedNode n;
       if ((n = nodeOrRecurse(cursor, node))) {
         return n;
       }
@@ -784,12 +936,12 @@ QYamlParser::nodeAt(QTextCursor cursor)
   return nullptr;
 }
 
-YamlNode*
-QYamlParser::nodeInSequence(QTextCursor cursor, YamlSequence* seq)
+SharedNode
+QYamlParser::nodeInSequence(QTextCursor cursor, SharedSequence seq)
 {
   if (!seq->data().isEmpty()) {
     for (auto node : seq->data()) {
-      YamlNode* n;
+      SharedNode n;
       if ((n = nodeOrRecurse(cursor, node))) {
         return n;
       }
@@ -799,12 +951,12 @@ QYamlParser::nodeInSequence(QTextCursor cursor, YamlSequence* seq)
   return seq;
 }
 
-YamlNode*
-QYamlParser::nodeInMap(QTextCursor cursor, YamlMap* map)
+SharedNode
+QYamlParser::nodeInMap(QTextCursor cursor, QSharedPointer<YamlMap> map)
 {
   if (!map->data().isEmpty()) {
     for (auto node : map->data()) {
-      YamlNode* n;
+      SharedNode n;
       if ((n = nodeOrRecurse(cursor, node))) {
         return n;
       }
@@ -814,8 +966,8 @@ QYamlParser::nodeInMap(QTextCursor cursor, YamlMap* map)
   return map;
 }
 
-YamlNode*
-QYamlParser::nodeOrRecurse(QTextCursor cursor, YamlNode* node)
+SharedNode
+QYamlParser::nodeOrRecurse(QTextCursor cursor, SharedNode node)
 {
   if (cursor >= node->start() && cursor < node->end()) {
     switch (node->type()) {
@@ -824,6 +976,8 @@ QYamlParser::nodeOrRecurse(QTextCursor cursor, YamlNode* node)
         break;
       case YamlNode::YamlDirective:
       case YamlNode::TagDirective:
+      case YamlNode::Directive:
+      case YamlNode::ReservedDirective:
       case YamlNode::Start:
       case YamlNode::End:
       case YamlNode::MapItem:
@@ -832,9 +986,10 @@ QYamlParser::nodeOrRecurse(QTextCursor cursor, YamlNode* node)
       case YamlNode::Scalar:
         return node;
       case YamlNode::Sequence:
-        return nodeInSequence(cursor, qobject_cast<YamlSequence*>(node));
+        return nodeInSequence(cursor,
+                              qSharedPointerDynamicCast<YamlSequence>(node));
       case YamlNode::Map:
-        return nodeInMap(cursor, qobject_cast<YamlMap*>(node));
+        return nodeInMap(cursor, qSharedPointerDynamicCast<YamlMap>(node));
     }
   }
   return nullptr;
@@ -851,6 +1006,339 @@ QYamlParser::lookahead(int& index, const QString& text, QChar endof)
     c = text.at(index);
   }
   return result;
+}
+
+bool
+QYamlParser::l_directive(const QString& line,
+                         int& start,
+                         SharedNode& d,
+                         SharedComment& c)
+{
+  if (line.isEmpty())
+    return false;
+  auto s = line;
+  QString result;
+  if (c_directive(s.at(0))) {
+    //    s = s.mid(1);
+    if (ns_yaml_directive(s, start, d, c)) {
+      return true;
+    }
+    if (ns_tag_directive(s, start, d, c)) {
+      return true;
+    }
+    if (ns_reserved_directive(s, start, d, c)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool
+QYamlParser::ns_reserved_directive(const QString& line,
+                                   int& start,
+                                   SharedNode& d,
+                                   SharedComment& c)
+{
+  if (line.isEmpty())
+    return false;
+  auto len = 0;
+  auto pos = 1;
+  int paramStart = start + pos;
+  auto s = line.mid(pos);
+  QString result;
+  bool invalidSpace = false;
+  len = initial_whitespace(s);
+  if (len > 0)
+    invalidSpace = true;
+  paramStart += len;
+  pos += len;
+  s = s.mid(len);
+
+  if (ns_directive_name(s, result)) {
+    auto nameStart = pos + len;
+    len = result.length();
+    paramStart += len;
+    pos += len;
+    s = s.mid(len);
+    len = initial_whitespace(s);
+    paramStart += len;
+    pos += len;
+    s = s.mid(len);
+    d.reset(new YamlReservedDirective());
+    auto directive = qSharedPointerDynamicCast<YamlReservedDirective>(d);
+    if (invalidSpace)
+      directive->setWarning(InvalidSpaceWarning, true);
+    directive->setStart(createCursor(start));
+    directive->setName(result);
+    directive->setNameStart(createCursor(nameStart));
+    directive->setWarning(YamlWarning::ReservedDirectiveWarning, true);
+    while (ns_directive_parameter(s, result)) {
+      if (result == Characters::HASH) {
+        s = line.mid(pos);
+        paramStart--; // back away from #
+        break;
+      }
+      directive->addParameter(createCursor(paramStart), result);
+      len = result.length();
+      paramStart += len;
+      pos += len;
+      s = s.mid(len);
+      len = initial_whitespace(s);
+      paramStart += len;
+      pos += len;
+      s = s.mid(len);
+    }
+  }
+  d->setEnd(createCursor(paramStart));
+  len = initial_whitespace(s);
+  paramStart += len;
+  if (s.isEmpty()) {
+    start = start + pos;
+    return true;
+  } else {
+    auto p = 0;
+    s_l_comments(s, p, c);
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::ns_directive_parameter(const QString& s, QString& param)
+{
+  return ns_char_plus(s, param);
+}
+
+bool
+QYamlParser::ns_directive_name(const QString& s, QString& name)
+{
+  return ns_char_plus(s, name);
+}
+
+bool
+QYamlParser::ns_tag_directive(const QString& line,
+                              int& start,
+                              SharedNode& d,
+                              SharedComment& c)
+{
+  if (line.isEmpty())
+    return false;
+  auto s = line.mid(1);
+  auto len = 0;
+  auto handleStart = 0;
+  auto valueStart = 0;
+  auto pos = start + 1;
+  bool invalidSpace = false;
+  len = initial_whitespace(s);
+  if (len > 0)
+    invalidSpace = true;
+  pos += len;
+  s = s.mid(len);
+
+  if (!s.startsWith("TAG"))
+    return false;
+  s = s.mid(3);
+  pos += 3;
+
+  len = initial_whitespace(s);
+  s = s.mid(len);
+  pos += len;
+
+  YamlTagDirective::TagHandleType type = YamlTagDirective::NoTagType;
+  d.reset(new YamlTagDirective());
+  auto directive = qSharedPointerDynamicCast<YamlTagDirective>(d);
+  if (invalidSpace)
+    directive->setWarning(InvalidSpaceWarning, true);
+  directive->setStart(createCursor(start));
+
+  handleStart = pos;
+  QString handle;
+  c_tag_handle(s, handle, type);
+
+  if (type == YamlTagDirective::Named) {
+    len = handle.length() + 2;
+    pos += len;
+    s = s.mid(len);
+    //    valueStart = handleStart + len;
+    handleStart++;                // miss first ! char
+    directive->setHandle(handle); // only Named has a handle
+    directive->setHandleStart(createCursor(handleStart));
+  } else if (type == YamlTagDirective::Secondary) {
+    s = s.mid(2);
+    pos += 2;
+    handleStart++;
+    //    valueStart = handleStart + 1;
+  } else if (type == YamlTagDirective::Primary) {
+    s = s.mid(1);
+    pos += 1;
+    //    valueStart = handleStart + 1;
+  }
+  len = initial_whitespace(s);
+  s = s.mid(len);
+  pos += len;
+  valueStart = pos;
+  directive->setHandleType(type);
+
+  QString value;
+  if (!s.isEmpty()) {
+    auto c = s.at(0);
+    while (!s.isEmpty() && !s_space(c)) {
+      value += c;
+      s = s.mid(len);
+      c = s.at(0);
+      pos++;
+    }
+    directive->setValue(value);
+    directive->setValueStart(createCursor(valueStart));
+    directive->setEnd(createCursor(pos));
+  } else {
+    // TODO error  no value.
+  }
+
+  len = initial_whitespace(s);
+  s = s.mid(len);
+  pos += len;
+
+  if (!s.isEmpty()) {
+    auto p = 0;
+    s_l_comments(s, p, c);
+  }
+  start = pos + 1; // include ending newline
+
+  return true;
+}
+
+bool
+QYamlParser::ns_yaml_directive(const QString& line,
+                               int& start,
+                               SharedNode& d,
+                               SharedComment& c)
+{
+  if (line.isEmpty())
+    return false;
+  auto s = line.mid(1);
+  auto len = 0;
+  auto digit = 0;
+  auto pos = start + 1;
+  auto versionStart = start;
+  bool invalidSpace = false;
+  len = initial_whitespace(s);
+  if (len > 0)
+    invalidSpace = true;
+  versionStart += len;
+  pos += len;
+  s = s.mid(len);
+
+  if (!s.startsWith("YAML"))
+    return false;
+  s = s.mid(4);
+  versionStart += 4;
+  pos += 4;
+
+  len = initial_whitespace(s);
+  s = s.mid(len);
+  versionStart += len;
+  pos += len;
+
+  d.reset(new YamlYamlDirective());
+  auto directive = qSharedPointerDynamicCast<YamlYamlDirective>(d);
+  if (invalidSpace)
+    directive->setWarning(InvalidSpaceWarning, true);
+  directive->setStart(createCursor(start));
+  //  pos += s.length() + 1;
+  directive->setEnd(createCursor(pos));
+  directive->setVersionStart(createCursor(pos));
+  auto ch = s.at(0);
+  pos++;
+  if (ns_dec_digit(ch)) {
+    digit = ch.digitValue();
+    directive->setMajor(digit);
+    // for future expansion ?
+    if (digit < MIN_VERSION_MAJOR || digit > MAX_VERSION_MAJOR) {
+      directive->setError(YamlError::InvalidMajorVersion, true);
+    }
+  } else {
+    directive->setError(YamlError::BadYamlDirective, true);
+  }
+  s = s.mid(1);
+
+  ch = s.at(0);
+  pos++;
+  if (ch != Characters::POINT) {
+    directive->setError(YamlError::BadYamlDirective, true);
+  }
+  s = s.mid(1);
+
+  ch = s.at(0);
+  pos++;
+  s = s.mid(1);
+  if (ns_dec_digit(ch)) {
+    digit = ch.digitValue();
+    directive->setMinor(digit);
+    if (digit < MIN_VERSION_MINOR || digit > MAX_VERSION_MINOR) {
+      directive->setWarning(YamlWarning::InvalidMinorVersionWarning, true);
+    }
+  } else {
+    directive->setError(YamlError::BadYamlDirective, true);
+  }
+  directive->setVersionStart(createCursor(versionStart));
+  directive->setEnd(createCursor(pos));
+
+  auto p = 0;
+  if (!s.isEmpty()) {
+    len = initial_whitespace(s);
+    s = s.mid(len);
+    pos += len;
+    s_l_comments(s, pos, c);
+  }
+  start = start + pos + p + 1; // include ending newline
+
+  return true;
+}
+
+bool
+QYamlParser::c_directives_end(const QString& line, int& start, SharedNode& node)
+{
+  if (line == "---") {
+    node = SharedStart(new YamlStart);
+    node->setStart(createCursor(start));
+    start += 3;
+    node->setEnd(createCursor(start));
+    start++;
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::c_document_end(const QString& line, int& start, SharedNode& node)
+{
+  if (line.startsWith("...")) {
+    node = SharedEnd(new YamlEnd);
+    node->setStart(createCursor(start));
+    start += 3;
+    node->setEnd(createCursor(start));
+    start++;
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::l_document_suffix(const QString& line,
+                               int& start,
+                               SharedNode& n,
+                               SharedComment& c)
+{
+  if (line.length() < 3)
+    return false;
+  if (!c_document_end(line, start, n))
+    return false;
+  auto pos = 0;
+  auto s = line.mid(3);
+  QString comment;
+  s_l_comments(s, start, c);
+  return true;
 }
 
 bool
@@ -940,18 +1428,109 @@ QYamlParser::c_mapping_end(QChar c)
 }
 
 bool
+QYamlParser::c_comment(QChar c)
+{
+  return (c == Characters::HASH);
+}
+
+bool
+QYamlParser::b_comment(const QString& line)
+{
+  if (line.isEmpty())
+    return false;
+  auto c = line.at(0);
+  if (b_non_content(c))
+    return true;
+  return false;
+}
+
+bool
+QYamlParser::s_b_comment(const QString& line,
+                         int& start,
+                         SharedComment& sharedcomment)
+{
+  QString comment;
+  if (s_b_comment(line.mid(start), comment)) {
+    sharedcomment = SharedComment(new YamlComment(comment));
+    sharedcomment->setStart(createCursor(start));
+    sharedcomment->setEnd(createCursor(start + comment.length()));
+    return true;
+  }
+  return false;
+}
+
+bool
+QYamlParser::s_b_comment(const QString& s, QString& comment)
+{
+  if (s.isEmpty())
+    return false;
+  auto len = initial_whitespace(s);
+  auto text = s.mid(len);
+  if (c_nb_comment_text(text, comment)) {
+    return true;
+  }
+  return b_comment(text);
+}
+
+bool
+QYamlParser::l_comment(const QString& s, int& start, QString& commentText)
+{
+  auto text = s.mid(start);
+  auto len = initial_whitespace(text);
+  if (len == 0)
+    return false;
+  text = text.mid(len);
+  QString comment;
+  if (c_nb_comment_text(text, comment)) {
+    commentText = comment;
+    return true;
+  }
+  return b_comment(text);
+}
+
+bool
+QYamlParser::s_l_comments(const QString& line,
+                          int& start,
+                          SharedComment& sharedcomment)
+{
+  auto s = line;
+  auto indent = initial_whitespace(s);
+  s = s.mid(indent);
+  if (s.isEmpty())
+    return false;
+  // first line of possible multiline
+  s_b_comment(line, start, sharedcomment);
+  // TODO only one line is supplied so this doen't do anything
+  //    while (l_comment(line, start, comment)) {
+  //      comment += Characters::NEWLINE;
+  //      comment += comment;
+  //    }
+  if (!sharedcomment)
+    return false;
+  sharedcomment->setIndent(indent);
+  start = sharedcomment->endPos();
+  return true;
+}
+
+bool
 QYamlParser::c_nb_comment_text(const QString& line, QString& comment)
 {
+  if (line.isEmpty())
+    return false;
   auto indent = s_indent(line);
   auto text = line;
-  auto c = line.at(indent + 1);
-  text = text.mid(indent + 1);
+  auto c = line.at(indent);
+  text = text.mid(indent);
   if (c_comment(c)) {
     comment = c;
-    c = text.at(0);
     text = text.mid(1);
+    c = text.at(0);
     while (nb_char(c)) {
       comment += c;
+      text = text.mid(1);
+      if (text.isEmpty())
+        return true;
+      c = text.at(0);
     }
   }
   return false;
@@ -1149,6 +1728,8 @@ QYamlParser::c_ns_tag_property(const QString& line,
                                QString& tag,
                                YamlNode::TagHandleType& type)
 {
+  if (line.isEmpty())
+    return false;
   auto value = line;
   auto c = value.at(0);
 
@@ -1167,6 +1748,8 @@ QYamlParser::c_ns_tag_property(const QString& line,
 bool
 QYamlParser::c_verbatim_tag(const QString& line, QString& uri)
 {
+  if (line.isEmpty())
+    return false;
   auto value = line;
   QString result;
   auto c = value.at(0);
@@ -1206,6 +1789,8 @@ QYamlParser::c_tag_handle(const QString& line,
                           QString& tag,
                           YamlNode::TagHandleType& type)
 {
+  if (line.isEmpty())
+    return false;
   if (c_named_tag_handle(line, tag)) {
     type = YamlNode::Named;
   } else if (c_secondary_tag_handle(line)) {
@@ -1219,6 +1804,8 @@ QYamlParser::c_tag_handle(const QString& line,
 bool
 QYamlParser::c_primary_tag_handle(const QString& line)
 {
+  if (line.isEmpty())
+    return false;
   auto value = line;
   QString result;
   auto c = value.at(0);
@@ -1231,6 +1818,8 @@ QYamlParser::c_primary_tag_handle(const QString& line)
 bool
 QYamlParser::c_secondary_tag_handle(const QString& line)
 {
+  if (line.isEmpty())
+    return false;
   auto value = line;
   QString result;
   auto c = value.at(0);
@@ -1247,6 +1836,8 @@ QYamlParser::c_secondary_tag_handle(const QString& line)
 bool
 QYamlParser::c_named_tag_handle(const QString& line, QString& tag)
 {
+  if (line.isEmpty())
+    return false;
   auto value = line;
   QString result;
   auto c = value.at(0);
@@ -1269,6 +1860,8 @@ QYamlParser::c_named_tag_handle(const QString& line, QString& tag)
 bool
 QYamlParser::c_ns_anchor_property(const QString& line, QString& anchor)
 {
+  if (line.isEmpty())
+    return false;
   auto value = line;
   auto c = value.at(0);
   if (!c_anchor(c))
@@ -1317,6 +1910,8 @@ QYamlParser::ns_word_char(QChar c)
 bool
 QYamlParser::ns_uri_char(const QString& line)
 {
+  if (line.isEmpty())
+    return false;
   auto value = line;
   auto c = value.at(0);
   if (ns_word_char(c) || c == Characters::HASH || c == Characters::SEMICOLON ||
@@ -1589,135 +2184,16 @@ QYamlParser::c_ns_esc_char(const QString& line)
   return false;
 }
 
-bool
-QYamlParser::ns_tag_directive(const QString& line,
-                              int start,
-                              YamlTagDirective* directive)
-{
-  auto tag = line.mid(start);
-  auto len = 0;
-  auto digit = 0;
-  auto versionStart = start;
-
-  if (!c_directive(tag.at(0)))
-    return false;
-  tag = tag.mid(1);
-  versionStart++;
-
-  if (!tag.startsWith("TAG"))
-    return false;
-  tag = tag.mid(3);
-  versionStart += 3;
-
-  len = start_whitespace(tag);
-  tag = tag.mid(len);
-  versionStart += len;
-
-  directive = new YamlTagDirective(this);
-
-  YamlTagDirective::TagHandleType type = YamlTagDirective::NoTagType;
-  QString result;
-  len = c_tag_handle(tag, result, type);
-  QString handle, value;
-  auto handleStart = 0;
-  auto valueStart = 0;
-
-  if (type == YamlTagDirective::Named) {
-    handle = tag.mid(1, len);
-    handleStart++;
-    valueStart = handleStart + len + 2;
-    tag = tag.mid(len + 2).trimmed();
-    directive->setHandle(handle); // only Named has a handle
-    directive->setHandleStart(createCursor(handleStart));
-  } else if (type == YamlTagDirective::Secondary) {
-    tag = tag.mid(2);
-    handleStart++;
-    valueStart = handleStart + 1;
-  } else if (type == YamlTagDirective::Primary) {
-    tag = tag.mid(1);
-    valueStart = handleStart + 1;
-  }
-  len = start_whitespace(tag);
-  tag = tag.mid(len);
-  valueStart += len;
-  directive = new YamlTagDirective(handle, tag, this);
-  directive->setStart(createCursor(start));
-  directive->setEnd(createCursor(start + line.length()));
-  directive->setHandleType(type);
-  directive->setValueStart(createCursor(valueStart));
-  return true;
-}
-
-bool
-QYamlParser::ns_yaml_directive(const QString& line,
-                               int start,
-                               YamlDirective* directive)
-{
-  auto tag = line.mid(start);
-  auto len = 0;
-  auto digit = 0;
-  auto versionStart = start;
-
-  if (!c_directive(tag.at(0)))
-    return false;
-  tag = tag.mid(1);
-  versionStart++;
-
-  if (!tag.startsWith("YAML"))
-    return false;
-  tag = tag.mid(4);
-  versionStart += 4;
-
-  len = start_whitespace(tag);
-  tag = tag.mid(len);
-  versionStart += len;
-
-  directive = new YamlDirective(this);
-  auto c = tag.at(0);
-  if (ns_dec_digit(c)) {
-    digit = c.digitValue();
-    directive->setMajor(digit);
-    // for future expansion ?
-    if (digit < MIN_VERSION_MAJOR || digit > MAX_VERSION_MAJOR) {
-      directive->setError(YamlError::InvalidMajorVersion, true);
-    }
-  } else {
-    directive->setError(YamlError::BadYamlDirective, true);
-  }
-  tag = tag.mid(1);
-
-  c = tag.at(0);
-  if (c != Characters::POINT) {
-    directive->setError(YamlError::BadYamlDirective, true);
-  }
-  tag = tag.mid(1);
-
-  c = tag.at(0);
-  if (ns_dec_digit(c)) {
-    digit = c.digitValue();
-    directive->setMinor(digit);
-    if (digit < MIN_VERSION_MINOR || digit > MAX_VERSION_MINOR) {
-      directive->setError(YamlError::InvalidMinorVersion, true);
-    }
-  } else {
-    directive->setError(YamlError::BadYamlDirective, true);
-  }
-  tag = tag.mid(1);
-
-  directive->setStart(createCursor(start));
-  directive->setEnd(createCursor(start + line.length()));
-  directive->setVersionStart(createCursor(versionStart));
-
-  return true;
-}
-
 int
 QYamlParser::s_indent(const QString& line)
 {
+  if (line.isEmpty())
+    return 0;
   auto indent = 0;
   auto c = line.at(indent);
   while (s_space(c)) {
     indent++;
+    c = line.at(indent);
   }
   return indent;
 }
@@ -1747,7 +2223,7 @@ QYamlParser::b_as_space(QChar c)
 }
 
 int
-QYamlParser::start_whitespace(const QString& s)
+QYamlParser::initial_whitespace(const QString& s)
 {
   //  for (auto c : s) {
   //    if (!s_white(c))
@@ -1780,33 +2256,6 @@ QYamlParser::ns_anchor_name(QString& line)
   return true;
 }
 
-//int
-//QYamlParser::c_tag_handle(const QString& line,
-//                          YamlTagDirective::TagHandleType& type)
-//{
-//  auto len = 0;
-//  auto s = line;
-//  if (!c_tag(s.at(0))) // first !
-//    return -1;
-//  s = s.mid(1);
-//  auto c = s.at(0);
-//  while (!c_tag(c)) {
-//    if (s_white(c)) {
-//      type = YamlTagDirective::Primary;
-//      return 0;
-//    } else if (nb_char(c)) {
-//      type = YamlTagDirective::Named;
-//      // TODO possible error if len > 0
-//      len++;
-//    }
-//    s = s.mid(1);
-//    c = line.at(0);
-//  }
-//  if (len == 0)
-//    type = YamlTagDirective::Secondary;
-//  return len;
-//}
-
 bool
 QYamlParser::nb_json(QChar c)
 {
@@ -1816,25 +2265,25 @@ QYamlParser::nb_json(QChar c)
           (higher == 0 && lower >= 0x20 && lower <= 0xFF) || higher >= 0x1);
 }
 
-QList<QYamlDocument*>::iterator
+QList<SharedDocument>::iterator
 QYamlParser::begin()
 {
   return m_documents.begin();
 }
 
-QList<QYamlDocument*>::const_iterator
+QList<SharedDocument>::const_iterator
 QYamlParser::constBegin()
 {
   return m_documents.constBegin();
 }
 
-QList<QYamlDocument*>::iterator
+QList<SharedDocument>::iterator
 QYamlParser::end()
 {
   return m_documents.end();
 }
 
-QList<QYamlDocument*>::const_iterator
+QList<SharedDocument>::const_iterator
 QYamlParser::constEnd()
 {
   return m_documents.constEnd();

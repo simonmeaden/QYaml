@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lnplaintext/lnplaintextedit.h"
+#include "yamlnode.h"
 
 #include "qyaml_global.h"
 
@@ -50,7 +51,7 @@ private:
   QString m_filename;
   QString m_zipFile;
   HoverWidget* m_hoverWidget = nullptr;
-  YamlNode* m_hoverNode = nullptr;
+  SharedNode m_hoverNode = nullptr;
   int m_hoverTime = HOVERTIME;
 
   void killHoverWidget();

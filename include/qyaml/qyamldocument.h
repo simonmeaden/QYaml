@@ -11,14 +11,14 @@ class YamlNode;
 class YamlMap;
 class YamlSequence;
 class YamlMapItem;
-class YamlDirective;
+class YamlYamlDirective;
 class YamlTagDirective;
 
 class QYAML_SHARED_EXPORT QYamlDocument : public QObject
 {
   Q_OBJECT
 public:
-  explicit QYamlDocument(QObject* parent);
+  explicit QYamlDocument(QObject* parent = nullptr);
 
   //! Returns the major version value.
   //!
@@ -71,7 +71,7 @@ public:
   int startPos();
 
   //! Sets the QTextCursor for the start of the document text.
-  void setStart(QTextCursor position, YamlStart* start = nullptr);
+  void setStart(QTextCursor position, SharedStart start = nullptr);
 
   bool hasStart();
 
@@ -82,7 +82,7 @@ public:
   int endPos();
 
   //! Sets the QTextCursor for the end of the document text.
-  void setEnd(QTextCursor mark, YamlEnd* end = nullptr);
+  void setEnd(QTextCursor mark, SharedEnd end = nullptr);
 
   bool hasEnd();
 
@@ -120,42 +120,48 @@ public:
   //! Returns the ordered list of yaml nodes.
   //!
   //! To return the map of QTextCursor->Node then use the nodeMap() method.
-  QList<YamlNode*> nodes() const;
+  QList<SharedNode> nodes() const;
 
   //! Returns the map of QTextCursor->Node.
   //!
   //! To return the ordered node list use the nodes() method.
-  const QMap<QTextCursor, YamlNode*>& nodeMap() const;
+  const QMap<QTextCursor, SharedNode>& nodeMap() const;
 
   //! Returns the yaml root node item at index.
-  YamlNode* node(int index);
+  SharedNode node(int index);
 
   //! Returns the yaml root node item at the cursor.
-  YamlNode* node(QTextCursor cursor);
+  SharedNode node(QTextCursor cursor);
 
   //! Adds a YamlNode* to the document and returns true if successful, otherwise
   //! returns false.
   //!
   //! Only scalars, maps and sequences can be added to the document. Other
   //! types are internal sub types of these types.
-  bool addNode(YamlNode* Data, bool root = false);
+  bool addNode(SharedNode Data, bool root = false);
 
-  QMap<QTextCursor, YamlTagDirective*> tags() const;
-  void setTags(const QMap<QTextCursor, YamlTagDirective*>& tags);
-  void addTag(YamlTagDirective* tag);
+  void addDirective(SharedNode directive);
+
+  QMap<QTextCursor, SharedTagDirective> tags() const;
+  void setTags(const QMap<QTextCursor, SharedTagDirective>& tags);
+  void addTag(SharedTagDirective tag);
   bool hasTag();
   void removeTag(QTextCursor position);
 
-  YamlDirective* getDirective() const;
-  bool hasDirective();
-  void setDirective(YamlDirective* directive);
+  QMap<QTextCursor, SharedReservedDirective> reserved() const;
+  void addReserved(const QMap<QTextCursor, SharedReservedDirective>& reserved);
+  bool hasReserved();
+  void removeReserved(QTextCursor position);
 
+  SharedYamlDirective getDirective() const;
+  bool hasDirective();
+  void setDirective(SharedYamlDirective directive);
 
   //! returns the list of document errors.
   const YamlErrors& errors() const;
 
   //! Sets/clears an error for the document
-  void setError(const YamlError &error, bool set);
+  void setError(const YamlError& error, bool set);
 
   //! Sets a number of errors for the document
   void setErrors(const YamlErrors& newErrors);
@@ -170,15 +176,9 @@ public:
   void setWarnings(const YamlWarnings& newWarnings);
 
 private:
-  YamlDirective* m_directive = nullptr;
-  //  QTextCursor
-  //      m_versionStart;  //!< the start position of '%YAML 1.n' YAML directive
-  //  int m_versionLength; //!< the length of the directive string
-  bool m_implicitVersion =
-    true; //!< true if the directive string is NOT in document.
-          //  int m_majorVersion = 1; //!< the major version number, default 1
-          //  int m_minorVersion = 2; //!< the minor version number, default 2
-
+  SharedYamlDirective m_directive;
+  //! true if the directive string is NOT in document.
+  bool m_implicitVersion = true;
   bool m_implicitStart = true; //!< true if '---' is NOT in document
   bool m_implicitEnd = true;   //!< true if '...' is not in document
 
@@ -187,17 +187,25 @@ private:
   QTextCursor m_start;
   QTextCursor m_end;
   // holds ordered ROOT list of data
-  QList<YamlNode*> m_root;
+  QList<SharedNode> m_root;
   // holds ordered list of all nodes in document
-  QList<YamlNode*> m_data;
+  QList<SharedNode> m_data;
   // holds a map position => node* of ALL nodes.
-  QMap<QTextCursor, YamlNode*> m_nodes;
-  QMap<QTextCursor, YamlTagDirective*> m_tags;
+  QMap<QTextCursor, SharedNode> m_nodes;
+  // TODO maybe merge these with test.
+  QMap<QTextCursor, SharedYamlDirective> m_yaml;
+  QMap<QTextCursor, SharedTagDirective> m_tags;
+  QMap<QTextCursor, SharedReservedDirective> m_reserved;
 
   YamlErrors m_errors;
   YamlWarnings m_warnings;
 
-  bool addSequenceData(YamlSequence* sequence, YamlMapItem* item = nullptr);
-  bool addMapData(YamlMap* map, YamlMapItem* item = nullptr);
-  bool addMapItemData(YamlMapItem* item);
+  bool addSequenceData(QSharedPointer<YamlSequence> sequence,
+                       QSharedPointer<YamlMapItem> item = nullptr);
+  bool addMapData(QSharedPointer<YamlMap> map,
+                  QSharedPointer<YamlMapItem> item = nullptr);
+  bool addMapItemData(QSharedPointer<YamlMapItem> item);
 };
+//! \typedef typedef QSharedPointer<QYamlDocument> SharedDocument
+//! typedef for a shared pointer to QYamlDocument.
+typedef QSharedPointer<QYamlDocument> SharedDocument;

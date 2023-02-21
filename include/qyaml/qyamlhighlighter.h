@@ -45,26 +45,29 @@ public:
   const QColor& commentColor() const;
   void setCommentColor(const QColor& commentColor);
 
-  const QColor &mapColor() const;
-  void setMapColor(const QColor &mapColor);
+  const QColor& mapColor() const;
+  void setMapColor(const QColor& mapColor);
 
   QColor tagColor() const;
-  void setTagColor(const QColor &tagColor);
+  void setTagColor(const QColor& tagColor);
+
+  QColor reservedColor() const;
+  void setReservedColor(const QColor &reservedColor);
 
   QColor directiveColor() const;
-  void setDirectiveColor(const QColor &directiveColor);
+  void setDirectiveColor(const QColor& directiveColor);
 
   QColor docStartColor() const;
-  void setDocStartColor(const QColor &docStartColor);
+  void setDocStartColor(const QColor& docStartColor);
 
   QColor docEndColor() const;
-  void setDocEndColor(const QColor &docEndColor);
+  void setDocEndColor(const QColor& docEndColor);
 
   QColor errorColor() const;
-  void setErrorColor(const QColor &errorColor);
+  void setErrorColor(const QColor& errorColor);
 
   QColor warningColor() const;
-  void setWarningColor(const QColor &warningColor);
+  void setWarningColor(const QColor& warningColor);
 
 protected:
 private:
@@ -82,6 +85,7 @@ private:
   QColor m_scalarColor;
   QColor m_directiveColor;
   QColor m_tagColor;
+  QColor m_reservedColor;
   QColor m_commentColor;
   QColor m_docStartColor;
   QColor m_docEndColor;
@@ -98,22 +102,29 @@ private:
   QTextCharFormat m_scalarFormat;
   QTextCharFormat m_directiveFormat;
   QTextCharFormat m_tagFormat;
+  QTextCharFormat m_reservedFormat;
   QTextCharFormat m_docStartFormat;
   QTextCharFormat m_docEndFormat;
+  QTextCharFormat m_warningFormat;
 
   bool isFormatable(int nodeStart,
                     int nodeLength,
                     int blockStart,
                     int textLength,
                     FormatSize& result);
-  void setScalarFormat(YamlNode *node, int blockStart, int textLength);
-  void setKeyFormat(YamlMapItem *node, int blockStart, int textLength);
-  void setCommentFormat(YamlNode *node, int blockStart, int textLength);
-  void setDirectiveFormat(YamlNode *node, int blockStart, int textLength);
-  void setTagFormat(YamlNode *node, int blockStart, int textLength);
-  void setMapFormat(YamlNode *node, int blockStart, int textLength);
-  void setMapItemFormat(YamlMapItem *node, int blockStart, int textLength);
-  void setSequenceFormat(YamlNode *node, int blockStart, int textLength);
-  void setStartTagFormat(YamlNode *node, int blockStart, int textLength);
-  void setEndTagFormat(YamlNode *node, int blockStart, int textLength);
+  void setScalarFormat(SharedNode node, int blockStart, int textLength);
+  void setKeyFormat(QSharedPointer<YamlMapItem> node,
+                    int blockStart,
+                    int nodeLength);
+  void setCommentFormat(SharedNode node, int blockStart, int textLength);
+  void setDirectiveFormat(SharedNode node, int blockStart, int textLength);
+  void setTagFormat(SharedNode node, int blockStart, int textLength);
+  void setReservedFormat(SharedNode node, int blockStart, int textLength);
+  void setMapFormat(SharedNode node, int blockStart, int textLength);
+  void setMapItemFormat(QSharedPointer<YamlMapItem> node,
+                        int blockStart,
+                        int textLength);
+  void setSequenceFormat(SharedNode node, int blockStart, int textLength);
+  void setStartTagFormat(SharedNode node, int blockStart, int textLength);
+  void setEndTagFormat(SharedNode node, int blockStart, int textLength);
 };

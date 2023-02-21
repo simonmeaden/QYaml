@@ -3,6 +3,7 @@
 #include <QFile>
 #include <QObject>
 #include <QRegularExpression>
+#include <QSharedPointer>
 #include <QTextDocument>
 
 #include <config/baseconfig.h>
@@ -90,33 +91,33 @@ public:
   //!
   //! \sa QYamlParser::document(int)
   //! \sa QYamlParser::isEmpty()
-  QList<QYamlDocument*> documents() const;
+  QList<SharedDocument> documents() const;
 
   //! Returns a pointer to the QYamlDocument at index, or nullptr if the
   //! index is out of range.
   //!
   //! \sa QYamlParser::documents()
-  QYamlDocument* document(int index);
+  SharedDocument document(int index);
 
-  void setDocuments(QList<QYamlDocument*> root);
-  void append(QYamlDocument* document);
+  void setDocuments(QList<SharedDocument> root);
+  void append(SharedDocument document);
   bool isMultiDocument();
 
   //! Returns the node at the cursor position if it exists otherwise
   //! returns nullptr;
-  YamlNode* nodeAt(QTextCursor cursor);
+  SharedNode nodeAt(QTextCursor cursor);
 
   bool isEmpty();
   int count();
 
-  QList<QYamlDocument*>::iterator begin();
-  QList<QYamlDocument*>::const_iterator constBegin();
-  QList<QYamlDocument*>::iterator end();
-  QList<QYamlDocument*>::const_iterator constEnd();
+  QList<SharedDocument>::iterator begin();
+  QList<SharedDocument>::const_iterator constBegin();
+  QList<SharedDocument>::iterator end();
+  QList<SharedDocument>::const_iterator constEnd();
 
   QString text() const;
 
-  //  const QMap<QTextCursor, YamlNode*>& nodes() const;
+  //  const QMap<QTextCursor, SharedNode>& nodes() const;
 
 signals:
   void parseComplete();
@@ -126,10 +127,8 @@ private:
   QYamlSettings* m_settings = nullptr;
   QString m_text;
   QTextDocument* m_document = nullptr;
-  //  QYamlDocument *m_currentDoc = nullptr;
-  //    QMap<QTextCursor, YamlNode*> m_nodes;
-  QMap<QString, YamlAnchor*> m_anchors;
-  QList<QYamlDocument*> m_documents;
+  QMap<QString, SharedAnchor> m_anchors;
+  QList<SharedDocument> m_documents;
   QString m_filename;
   QString m_zipFile;
   YamlErrors m_errors = NoErrors;
@@ -156,36 +155,107 @@ private:
   static const QRegularExpression YAML_DIRECTIVE;
   static const QRegularExpression TAG_DIRECTIVE;
 
-  QYamlDocument* parseDocumentStart(struct fy_event* event);
+  SharedDocument parseDocumentStart(struct fy_event* event);
   bool resolveAnchors();
   QTextCursor createCursor(int position);
-  void parseFlowSequence(YamlSequence* sequence, int& i, const QString& text);
-  void parseFlowMap(YamlMap* map, int& i, const QString& text);
-  YamlComment* parseComment(int& i, const QString& text);
-  YamlScalar* parseFlowScalar(const QString& text, int i);
+  //  void parseFlowSequence(SharedSequence sequence,
+  //                         int& i,
+  //                         const QString& text);
+  //  void parseFlowMap(SharedMap map, int& i, const QString& text);
+  //  QSharedPointer<YamlComment> parseComment(int& i, const QString& text);
+  //  QSharedPointer<YamlScalar> parseFlowScalar(const QString& text, int i);
   bool getNextChar(QChar& c, const QString& text, int& i);
   int getInitialSpaces(const QString& docText,
                        int initialIndent,
                        int& i,
                        QChar& c);
-  void buildDocuments(const QString& text,
-                      QList<YamlNode*> nodes,
-                      QList<YamlNode*> rootNodes);
-  YamlNode* nodeInSequence(QTextCursor cursor, YamlSequence* seq);
-  YamlNode* nodeInMap(QTextCursor cursor, YamlMap* map);
-  YamlNode* nodeOrRecurse(QTextCursor cursor, YamlNode* node);
+  //  void buildDocuments(const QString& text,
+  //                      QList<SharedNode> nodes,
+  //                      QList<SharedNode> rootNodes);
+  SharedNode nodeInSequence(QTextCursor cursor, SharedSequence seq);
+  SharedNode nodeInMap(QTextCursor cursor, SharedMap map);
+  SharedNode nodeOrRecurse(QTextCursor cursor, SharedNode node);
 
   QString lookahead(int& index,
                     const QString& text,
                     QChar endof = Characters::NEWLINE);
-//  bool hasYamlDirective()
-//  {
-//    // TODO
-//    //    for (auto node : m_nodes) {
-//    //    }
-//    return false;
-//  }
+  //  bool hasYamlDirective()
+  //  {
+  //    // TODO
+  //    //    for (auto node : m_nodes) {
+  //    //    }
+  //    return false;
+  //  }
 
+  bool l_explicit_document() { return false; }
+  bool l_bare_document() { return false; }
+  bool e_node() { return false; }
+  bool l_directive_document() { return false; }
+  bool l_directive(const QString& line,
+                   int& start,
+                   SharedNode& d,
+                   SharedComment& c);
+
+  bool ns_reserved_directive(const QString& line,
+                             int& start,
+                             SharedNode& d,
+                             SharedComment& c);
+
+  bool ns_char_plus(const QString& s, QString& value)
+  {
+    QString result;
+    for (auto c : s) {
+      if (!ns_char(c)) {
+        if (!result.isEmpty()) {
+          value = result;
+          return true;
+        }
+        break;
+      }
+      result += c;
+    }
+    return false;
+  }
+
+  bool ns_directive_parameter(const QString& s, QString& param);
+
+  bool ns_directive_name(const QString& s, QString& name);
+
+  bool ns_tag_directive(const QString& line,
+                        int& start,
+                        SharedNode& d,
+                        SharedComment& c);
+
+  bool ns_yaml_directive(const QString& line,
+                         int& start,
+                         SharedNode& d,
+                         SharedComment& c);
+  bool c_directives_end(const QString& line, int& start, SharedNode& node);
+
+  bool c_document_end(const QString& line, int& start, SharedNode& node);
+
+  bool l_document_suffix(const QString& line,
+                         int& start,
+                         SharedNode& n,
+                         SharedComment& c);
+
+  //! Returns true if a forbidden construct is passed
+  bool c_forbidden(const QString& line, SharedNode& node)
+  {
+    //    auto indent = initial_whitespace(line);
+    //    // should start at beginning of line.
+    //    if (indent > 0)
+    //      return true;
+
+    //    if (c_directives_end(line)) {
+    //      node.reset(new YamlStart());
+    //      return false;
+    //    } else if (c_document_end(line)) {
+    //      node.reset(new YamlEnd());
+    //      return false;
+    //    }
+    return true;
+  }
   bool c_indicator(QChar c);
   bool c_flow_indicator(QChar c);
   bool b_char(QChar c, int version = 12);
@@ -199,60 +269,14 @@ private:
   bool c_sequence_end(QChar c);
   bool c_mapping_start(QChar c);
   bool c_mapping_end(QChar c);
-  bool c_comment(QChar c)
-  {
-    return (c == Characters::HASH);
-  }
-  bool b_comment(const QString& line)
-  {
-    auto c = line.at(0);
-    if (b_non_content(c))
-      return true;
-    return false;
-  }
-  bool s_b_comment(const QString& line, int start, QString& commentText)
-  {
-    return s_b_comment(line.mid(start), commentText);
-  }
-  bool s_b_comment(const QString& s, QString& commentText)
-  {
-    auto len = start_whitespace(s);
-    auto text = s.mid(len);
-    QString comment;
-    if (c_nb_comment_text(text, comment)) {
-      commentText = comment;
-      return true;
-    }
-    return b_comment(text);
-  }
-  bool l_comment(const QString& s, int start, QString& commentText)
-  {
-    auto text = s.mid(start);
-    auto len = start_whitespace(text);
-    if (len == 0)
-      return false;
-    text = text.mid(len);
-    QString comment;
-    if (c_nb_comment_text(text, comment)) {
-      commentText = comment;
-      return true;
-    }
-    return b_comment(text);
-  }
-  bool s_l_comments(const QString& line, int start, QString& commentText)
-  {
-    if (s_b_comment(line, commentText)) {
-      return true;
-    }
-    QString comment;
-    while (l_comment(line, start, comment)) {
-      commentText += Characters::NEWLINE;
-      commentText += comment;
-    }
-    if (commentText.isEmpty())
-      return false;
-    return true;
-  }
+  bool c_comment(QChar c);
+  bool b_comment(const QString& line);
+  bool s_b_comment(const QString& line, int& start,  SharedComment& sharedcomment);
+  bool s_b_comment(const QString& s, QString& comment);
+  bool l_comment(const QString& s, int& start, QString& commentText);
+  bool s_l_comments(const QString& line,
+                    int& start,
+                    SharedComment& sharedcomment);
   bool b_as_line_feed(QChar c) { return (b_break(c)); }
   bool c_nb_comment_text(const QString& line, QString& comment);
   bool c_anchor(QChar c);
@@ -279,8 +303,8 @@ private:
   bool c_verbatim_tag(const QString& line, QString& uri);
 
   //! Returns true if the string s contains valid ns shorthand tag. The tag
-  //! value is set to the correct tag name if the tag is a named type. The type
-  //! attribute is set to either YamlNode::Named, YamlNode::Secondary or
+  //! value is set to the correct tag name if the tag is a named type. The
+  //! type attribute is set to either YamlNode::Named, YamlNode::Secondary or
   //! YamlNode::Primary to specify the tag type.
   bool c_ns_shorthand_tag(const QString& line,
                           QString& tag,
@@ -309,6 +333,15 @@ private:
   int s_indent(const QString& line);
   bool s_indent_less_than(int value, const QString& line);
   bool s_indent_less_or_equal(int value, const QString& line);
+  bool l_empty(const QString& line, int indent)
+  {
+    // TODO s_line_prefix
+    if (/*s_line_prefix(line) || */ s_indent_less_than(indent, line)) {
+      return true;
+    }
+    return false;
+  }
+
   // TODO s-line-prefix
   // TODO s-block-line-prefix
   // TODO s-flow-line-prefix
@@ -319,7 +352,7 @@ private:
   // TODO s-flow-folded
   bool b_as_space(QChar c);
   //! Returns length of whitespace characters at start of text.
-  int start_whitespace(const QString& s);
+  int initial_whitespace(const QString& s);
 
   bool ns_char(QChar c);
   bool ns_dec_digit(QChar c);
@@ -349,10 +382,16 @@ private:
   bool ns_esc_16_bit(const QString& line);
   bool ns_esc_32_bit(const QString& line);
   bool ns_tag_prefix(QChar c) { return false; }
-  bool ns_yaml_directive(const QString& line, int start, YamlDirective *directive);
-  bool ns_tag_directive(const QString& line, int start, YamlTagDirective *directive);
   bool ns_anchor_char(QChar c);
   bool ns_anchor_name(QString& line);
 
   bool nb_json(QChar c);
+  void createDocIfNull(int start, SharedDocument& currentDoc);
+  //  SharedComment storeCommentIfExists(SharedDocument currentDoc,
+  //                                     QString comment,
+  //                                     int& start);
+  void storeNode(SharedDocument currentDoc,
+                 SharedNode node,
+                 int& start,
+                 int length);
 };

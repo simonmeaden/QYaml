@@ -5,6 +5,10 @@
 
 #include "qyaml/yamlerrors.h"
 
+class YamlNode; // forward declare so QSharedPointer works;
+//! \typedef typedef SharedNode SharedNode
+//! typedef for a shared pointer to YamlNode.
+typedef QSharedPointer<YamlNode> SharedNode;
 class YamlNode : public QObject
 {
   Q_OBJECT
@@ -18,8 +22,10 @@ public:
   enum Type
   {
     Undefined,
+    Directive,
     YamlDirective,
     TagDirective,
+    ReservedDirective,
     Start,
     End,
     Scalar,
@@ -39,11 +45,10 @@ public:
     Anchor, // an anchor NOT a tag type
   };
 
-
   YamlNode(QObject* parent = nullptr);
 
-  YamlNode* parent() const;
-  void setParent(YamlNode* Parent);
+  SharedNode parent() const;
+  void setParent(SharedNode Parent);
 
   int indent() const;
   void setIndent(int indent);
@@ -160,8 +165,8 @@ public:
       if (errors.testFlag(MissingMatchingQuote))
         list.append(
           tr("The scalar has a start ' or \" but no a matching closer"));
-      if (errors.testFlag(EmptyFlowValue))
-        list.append(tr("In flow values cannot be empty"));
+//      if (errors.testFlag(EmptyFlowValue))
+//        list.append(tr("In flow values cannot be empty"));
       // TODO complete the entire errors flags
     }
     return list;
@@ -175,9 +180,18 @@ public:
     else {
       if (warnings.testFlag(InvalidMinorVersionWarning))
         list.append(tr("The minor version is invalid"));
+      if (warnings.testFlag(ReservedDirectiveWarning))
+        list.append(tr("Illegal tag directive\n"
+                       "Reserved for futute YAML use."));
+      if (warnings.testFlag(InvalidSpaceWarning))
+        list.append(tr("The tag name should follow immediately\n"
+                       "after the % with no spaces."));
       if (warnings.testFlag(TabCharsDiscouraged))
         list.append(
           tr("The use of literal tabs (\\t) characters is discouraged."));
+      if (warnings.testFlag(IllegalCommentPosition))
+        list.append(
+          tr("Comments are technically illegal at this position."));
       // TODO complete the entire warnings flags
     }
     return list;
@@ -188,7 +202,7 @@ protected:
   FlowType m_flowType = Block;
 
 private:
-  YamlNode* m_parent;
+  SharedNode m_parent;
   int m_indent = 0;
   int m_row = 0;
   int m_column = 0;
@@ -205,8 +219,50 @@ class YamlDirective : public YamlNode
 {
   Q_OBJECT
 public:
-  YamlDirective(QObject* parent);
-  YamlDirective(int major, int minor, QObject* parent);
+  YamlDirective(QObject* parent = nullptr);
+
+//  DirectiveType directiveType() const;
+//  void setDirectiveType(DirectiveType directiveType);
+
+private:
+//  DirectiveType m_directiveType = NoDirective;
+};
+//! \typedef typedef QSharedPointer<YamlDirective> SharedDirective
+//! typedef for a shared pointer to YamlDirective.
+typedef QSharedPointer<YamlDirective> SharedDirective;
+
+class YamlReservedDirective : public YamlDirective
+{
+  Q_OBJECT
+public:
+  YamlReservedDirective(QObject* parent = nullptr);
+
+  QString name() const;
+  void setName(const QString& name);
+
+  void addParameter(QTextCursor cursor, const QString& param);
+  QString parameter(QTextCursor cursor);
+  QMap<QTextCursor, QString> parameters();
+
+  QTextCursor nameStart() const;
+  void setNameStart(const QTextCursor& nameStart);
+
+private:
+  QString m_name;
+  QTextCursor m_nameStart;
+  QMap<QTextCursor, QString> m_parameters;
+};
+//! \typedef typedef QSharedPointer<YamlReservedDirective>
+//! SharedReservedDirective typedef for a shared pointer to
+//! YamlReservedDirective.
+typedef QSharedPointer<YamlReservedDirective> SharedReservedDirective;
+
+class YamlYamlDirective : public YamlDirective
+{
+  Q_OBJECT
+public:
+  YamlYamlDirective(QObject* parent = nullptr);
+  YamlYamlDirective(int major, int minor, QObject* parent = nullptr);
 
   int major() const;
   void setMajor(int major);
@@ -225,15 +281,18 @@ private:
   int m_minor = 2;
   QTextCursor m_versionStart;
 };
+//! \typedef typedef SharedYamlDirective SharedYamlDirective
+//! typedef for a shared pointer to YamlYamlDirective.
+typedef QSharedPointer<YamlYamlDirective> SharedYamlDirective;
 
-class YamlTagDirective : public YamlNode
+class YamlTagDirective : public YamlDirective
 {
   Q_OBJECT
 public:
-  YamlTagDirective(QObject* parent);
+  YamlTagDirective(QObject* parent = nullptr);
   YamlTagDirective(const QString& handle,
                    const QString& value,
-                   QObject* parent);
+                   QObject* parent = nullptr);
 
   bool isValid();
 
@@ -259,30 +318,42 @@ private:
   QTextCursor m_valueStart;
   QString m_value;
 };
+//! \typedef typedef SharedTagDirective SharedTagDirective
+//! typedef for a shared pointer to YamlTagDirective.
+typedef QSharedPointer<YamlTagDirective> SharedTagDirective;
 
 class YamlStart : public YamlNode
 {
   Q_OBJECT
 public:
-  YamlStart(QObject* parent);
+  YamlStart(QObject* parent = nullptr);
 };
+//! \typedef typedef SharedStart SharedStart
+//! typedef for a shared pointer to YamlStart.
+typedef QSharedPointer<YamlStart> SharedStart;
 
 class YamlEnd : public YamlNode
 {
   Q_OBJECT
 public:
-  YamlEnd(QObject* parent);
+  YamlEnd(QObject* parent = nullptr);
 };
+//! \typedef typedef QSharedPointer<YamlEnd> SharedEnd
+//! typedef for a shared pointer to YamlEnd.
+typedef QSharedPointer<YamlEnd> SharedEnd;
 
 class YamlAnchor : public YamlNode
 {
   Q_OBJECT
 public:
-  YamlAnchor(QObject* parent)
+  YamlAnchor(QObject* parent = nullptr)
     : YamlNode(parent)
   {
   }
 };
+//! \typedef typedef QSharedPointer<YamlAnchor> SharedAnchor
+//! typedef for a shared pointer to YamlAnchor.
+typedef QSharedPointer<YamlAnchor> SharedAnchor;
 
 class YamlScalar : public YamlNode
 {
@@ -319,20 +390,23 @@ private:
   QString toFlowScalar(const QString& text);
   QString toBlockScalar(const QString& text);
 };
+//! \typedef typedef QSharedPointer<YamlScalar> SharedScalar
+//! typedef for a shared pointer to YamlScalar.
+typedef QSharedPointer<YamlScalar> SharedScalar;
 
 class YamlMapItem : public YamlNode
 {
   Q_OBJECT
 public:
-  YamlMapItem(QObject* parent);
-  YamlMapItem(const QString& key, YamlNode* data, QObject* parent);
+  YamlMapItem(QObject* parent = nullptr);
+  YamlMapItem(const QString& key, SharedNode data, QObject* parent = nullptr);
 
   const QString& key() const;
   void setKey(const QString& key);
   int keyLength() const;
 
-  YamlNode* data() const;
-  void setData(YamlNode* data);
+  SharedNode data() const;
+  void setData(SharedNode data);
 
   //  const QTextCursor& keyStart() const;
   //  int keyStartPos();
@@ -342,44 +416,51 @@ public:
 
 private:
   QString m_key;
-  YamlNode* m_data = nullptr;
+  SharedNode m_data = nullptr;
   QTextCursor m_keyStart;
   QTextCursor m_dataStart;
 };
+//! \typedef typedef QSharedPointer<YamlMapItem> SharedMapItem
+//! typedef for a shared pointer to YamlMapItem.
+typedef QSharedPointer<YamlMapItem> SharedMapItem;
 
 class YamlMap : public YamlNode
 {
   Q_OBJECT
 public:
   YamlMap(QObject* parent = nullptr);
-  YamlMap(QMap<QString, YamlMapItem*> data, QObject* parent = nullptr);
+  YamlMap(QMap<QString, QSharedPointer<YamlMapItem>> data,
+          QObject* parent = nullptr);
 
-  QMap<QString, YamlMapItem*> data() const;
-  void setData(QMap<QString, YamlMapItem*> data);
-  bool insert(const QString& key, YamlMapItem* data);
+  QMap<QString, QSharedPointer<YamlMapItem>> data() const;
+  void setData(QMap<QString, QSharedPointer<YamlMapItem>> data);
+  bool insert(const QString& key, QSharedPointer<YamlMapItem> data);
   int remove(const QString& key);
-  YamlMapItem* value(const QString& key);
+  QSharedPointer<YamlMapItem> value(const QString& key);
   bool contains(const QString& key);
 
   // YamlNode interface
   QString toString(const QString& text, FlowType override) override;
 
 private:
-  QMap<QString, YamlMapItem*> m_data;
+  QMap<QString, QSharedPointer<YamlMapItem>> m_data;
 };
+//! \typedef typedef QSharedPointer<YamlMap> SharedMap
+//! typedef for a shared pointer to YamlMap.
+typedef QSharedPointer<YamlMap> SharedMap;
 
 class YamlSequence : public YamlNode
 {
   Q_OBJECT
 public:
   YamlSequence(QObject* parent = nullptr);
-  YamlSequence(QVector<YamlNode*> sequence, QObject* parent = nullptr);
+  YamlSequence(QVector<SharedNode> sequence, QObject* parent = nullptr);
 
-  QVector<YamlNode*> data() const;
-  void setData(QVector<YamlNode*> data);
-  bool append(YamlNode* data);
+  QVector<SharedNode> data() const;
+  void setData(QVector<SharedNode> data);
+  bool append(SharedNode data);
   void remove(int index);
-  int indexOf(YamlNode* node);
+  int indexOf(SharedNode node);
 
   //  void setEnd(const QTextCursor& end) override;
 
@@ -387,8 +468,11 @@ public:
   QString toString(const QString& text, FlowType override) override;
 
 private:
-  QVector<YamlNode*> m_data;
+  QVector<SharedNode> m_data;
 };
+//! \typedef typedef QSharedPointer<YamlSequence> SharedSequence
+//! typedef for a shared pointer to YamlSequence.
+typedef QSharedPointer<YamlSequence> SharedSequence;
 
 class YamlComment : public YamlNode
 {
@@ -408,3 +492,6 @@ public:
 private:
   QString m_data;
 };
+//! \typedef typedef QSharedPointer<YamlComment> SharedComment
+//! typedef for a shared pointer to YamlComment.
+typedef QSharedPointer<YamlComment> SharedComment;
