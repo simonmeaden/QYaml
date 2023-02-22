@@ -123,6 +123,23 @@ signals:
   void parseComplete();
 
 protected:
+  bool l_directive(const QString& line,
+                   int& start,
+                   SharedNode& d,
+                   SharedComment& c);
+  bool s_l_comments(const QString& line,
+                    int& start,
+                    SharedComment& sharedcomment);
+  bool c_directives_end(const QString& line, int& start, SharedNode& node);
+  bool c_document_end(const QString& line, int& start, SharedNode& node);
+  bool l_document_suffix(const QString& line,
+                         int& start,
+                         SharedNode& n,
+                         SharedComment& c);
+  bool s_b_comment(const QString& line,
+                   int& start,
+                   SharedComment& sharedcomment);
+
 private:
   QYamlSettings* m_settings = nullptr;
   QString m_text;
@@ -191,15 +208,11 @@ private:
   bool l_bare_document() { return false; }
   bool e_node() { return false; }
   bool l_directive_document() { return false; }
-  bool l_directive(const QString& line,
-                   int& start,
-                   SharedNode& d,
-                   SharedComment& c);
 
   bool ns_reserved_directive(const QString& line,
                              int& start,
-                             SharedNode& d,
-                             SharedComment& c);
+                             SharedNode& sharednode,
+                             SharedComment& sharedcomment);
 
   bool ns_char_plus(const QString& s, QString& value)
   {
@@ -223,21 +236,13 @@ private:
 
   bool ns_tag_directive(const QString& line,
                         int& start,
-                        SharedNode& d,
-                        SharedComment& c);
+                        SharedNode& sharednode,
+                        SharedComment& sharedcomment);
 
   bool ns_yaml_directive(const QString& line,
                          int& start,
-                         SharedNode& d,
-                         SharedComment& c);
-  bool c_directives_end(const QString& line, int& start, SharedNode& node);
-
-  bool c_document_end(const QString& line, int& start, SharedNode& node);
-
-  bool l_document_suffix(const QString& line,
-                         int& start,
-                         SharedNode& n,
-                         SharedComment& c);
+                         SharedNode& sharednode,
+                         SharedComment& sharedcomment);
 
   //! Returns true if a forbidden construct is passed
   bool c_forbidden(const QString& line, SharedNode& node)
@@ -271,12 +276,8 @@ private:
   bool c_mapping_end(QChar c);
   bool c_comment(QChar c);
   bool b_comment(const QString& line);
-  bool s_b_comment(const QString& line, int& start,  SharedComment& sharedcomment);
   bool s_b_comment(const QString& s, QString& comment);
   bool l_comment(const QString& s, int& start, QString& commentText);
-  bool s_l_comments(const QString& line,
-                    int& start,
-                    SharedComment& sharedcomment);
   bool b_as_line_feed(QChar c) { return (b_break(c)); }
   bool c_nb_comment_text(const QString& line, QString& comment);
   bool c_anchor(QChar c);

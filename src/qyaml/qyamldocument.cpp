@@ -169,12 +169,9 @@ QYamlDocument::addNode(SharedNode data, bool root)
 {
   switch (data->type()) {
     case YamlNode::Comment:
-      m_data.append(data);
-      if (root)
-        m_root.append(data);
-      m_nodes.insert(data->start(), data);
-      return true;
     case YamlNode::Scalar:
+    case YamlNode::Start:
+    case YamlNode::End:
       m_data.append(data);
       if (root)
         m_root.append(data);

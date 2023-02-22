@@ -157,6 +157,7 @@ QYamlParser::parse(const QString& text, int startPos, int length)
       }
       if (sharedcomment) {
         currentDoc->addNode(sharedcomment);
+        sharedcomment = nullptr;
       }
       continue;
     }
@@ -164,6 +165,7 @@ QYamlParser::parse(const QString& text, int startPos, int length)
     if (s_l_comments(line, pos, sharedcomment)) {
       if (sharedcomment) {
         currentDoc->addNode(sharedcomment);
+        sharedcomment = nullptr;
       }
       continue;
     }
@@ -184,6 +186,7 @@ QYamlParser::parse(const QString& text, int startPos, int length)
         sharednode = nullptr;
         if (sharedcomment) {
           currentDoc->addNode(sharedcomment);
+          sharedcomment = nullptr;
         }
         currentDoc->setEnd(createCursor(pos));
         m_documents.append(currentDoc);
@@ -1036,8 +1039,8 @@ QYamlParser::l_directive(const QString& line,
 bool
 QYamlParser::ns_reserved_directive(const QString& line,
                                    int& start,
-                                   SharedNode& d,
-                                   SharedComment& c)
+                                   SharedNode& sharednode,
+                                   SharedComment& sharedcomment)
 {
   if (line.isEmpty())
     return false;
@@ -1064,8 +1067,9 @@ QYamlParser::ns_reserved_directive(const QString& line,
     paramStart += len;
     pos += len;
     s = s.mid(len);
-    d.reset(new YamlReservedDirective());
-    auto directive = qSharedPointerDynamicCast<YamlReservedDirective>(d);
+    sharednode.reset(new YamlReservedDirective());
+    auto directive =
+      qSharedPointerDynamicCast<YamlReservedDirective>(sharednode);
     if (invalidSpace)
       directive->setWarning(InvalidSpaceWarning, true);
     directive->setStart(createCursor(start));
@@ -1089,17 +1093,26 @@ QYamlParser::ns_reserved_directive(const QString& line,
       s = s.mid(len);
     }
   }
-  d->setEnd(createCursor(paramStart));
+  sharednode->setEnd(createCursor(paramStart));
+
   len = initial_whitespace(s);
   paramStart += len;
+  auto p = 0;
   if (s.isEmpty()) {
     start = start + pos;
     return true;
   } else {
-    auto p = 0;
-    s_l_comments(s, p, c);
-    return true;
+    p += len;
+    s_l_comments(s, p, sharedcomment);
+    if (sharedcomment) {
+      sharedcomment->setStart(createCursor(pos));
+      sharedcomment->setEnd(createCursor(pos + p));
+      start = sharedcomment->endPos();
+      return true;
+    }
   }
+
+  start = sharednode->endPos();
   return false;
 }
 
@@ -1118,8 +1131,8 @@ QYamlParser::ns_directive_name(const QString& s, QString& name)
 bool
 QYamlParser::ns_tag_directive(const QString& line,
                               int& start,
-                              SharedNode& d,
-                              SharedComment& c)
+                              SharedNode& sharednode,
+                              SharedComment& sharedcomment)
 {
   if (line.isEmpty())
     return false;
@@ -1145,8 +1158,8 @@ QYamlParser::ns_tag_directive(const QString& line,
   pos += len;
 
   YamlTagDirective::TagHandleType type = YamlTagDirective::NoTagType;
-  d.reset(new YamlTagDirective());
-  auto directive = qSharedPointerDynamicCast<YamlTagDirective>(d);
+  sharednode.reset(new YamlTagDirective());
+  auto directive = qSharedPointerDynamicCast<YamlTagDirective>(sharednode);
   if (invalidSpace)
     directive->setWarning(InvalidSpaceWarning, true);
   directive->setStart(createCursor(start));
@@ -1195,24 +1208,29 @@ QYamlParser::ns_tag_directive(const QString& line,
     // TODO error  no value.
   }
 
-  len = initial_whitespace(s);
-  s = s.mid(len);
-  pos += len;
-
+  auto p = 0;
   if (!s.isEmpty()) {
-    auto p = 0;
-    s_l_comments(s, p, c);
+    len = initial_whitespace(s);
+    s = s.mid(len);
+    pos += len;
+    s_l_comments(s, p, sharedcomment);
+    if (sharedcomment) {
+      sharedcomment->setStart(createCursor(pos));
+      sharedcomment->setEnd(createCursor(pos + p));
+      start = sharedcomment->endPos();
+      return true;
+    }
   }
-  start = pos + 1; // include ending newline
 
+  start = directive->endPos();
   return true;
 }
 
 bool
 QYamlParser::ns_yaml_directive(const QString& line,
                                int& start,
-                               SharedNode& d,
-                               SharedComment& c)
+                               SharedNode& sharednode,
+                               SharedComment& sharedcomment)
 {
   if (line.isEmpty())
     return false;
@@ -1240,8 +1258,8 @@ QYamlParser::ns_yaml_directive(const QString& line,
   versionStart += len;
   pos += len;
 
-  d.reset(new YamlYamlDirective());
-  auto directive = qSharedPointerDynamicCast<YamlYamlDirective>(d);
+  sharednode.reset(new YamlYamlDirective());
+  auto directive = qSharedPointerDynamicCast<YamlYamlDirective>(sharednode);
   if (invalidSpace)
     directive->setWarning(InvalidSpaceWarning, true);
   directive->setStart(createCursor(start));
@@ -1289,10 +1307,16 @@ QYamlParser::ns_yaml_directive(const QString& line,
     len = initial_whitespace(s);
     s = s.mid(len);
     pos += len;
-    s_l_comments(s, pos, c);
+    s_l_comments(s, p, sharedcomment);
+    if (sharedcomment) {
+      sharedcomment->setStart(createCursor(pos));
+      sharedcomment->setEnd(createCursor(pos + p));
+      start = sharedcomment->endPos();
+      return true;
+    }
   }
-  start = start + pos + p + 1; // include ending newline
 
+  start = directive->endPos();
   return true;
 }
 
@@ -1452,8 +1476,7 @@ QYamlParser::s_b_comment(const QString& line,
   QString comment;
   if (s_b_comment(line.mid(start), comment)) {
     sharedcomment = SharedComment(new YamlComment(comment));
-    sharedcomment->setStart(createCursor(start));
-    sharedcomment->setEnd(createCursor(start + comment.length()));
+    start = comment.length();
     return true;
   }
   return false;
@@ -1499,7 +1522,7 @@ QYamlParser::s_l_comments(const QString& line,
   if (s.isEmpty())
     return false;
   // first line of possible multiline
-  s_b_comment(line, start, sharedcomment);
+  s_b_comment(s, start, sharedcomment);
   // TODO only one line is supplied so this doen't do anything
   //    while (l_comment(line, start, comment)) {
   //      comment += Characters::NEWLINE;
@@ -1508,7 +1531,6 @@ QYamlParser::s_l_comments(const QString& line,
   if (!sharedcomment)
     return false;
   sharedcomment->setIndent(indent);
-  start = sharedcomment->endPos();
   return true;
 }
 
