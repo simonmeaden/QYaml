@@ -8,72 +8,24 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_library(${PROJECT_NAME} "")
 add_library(QYaml::QYaml ALIAS QYaml)
 
-if (USE_QT_VERSION EQUAL 5)
-    message("QT5")
-    find_package(Qt5
-      REQUIRED
-      COMPONENTS
-        Core
-        Gui
-        Widgets
-        Network
-        Xml
-        Svg
-        LinguistTools
-    )
-    set(CMAKE_AUTOMOC ON)
-    set(CMAKE_AUTOUIC ON)
-    set(CMAKE_AUTORCC ON)
-    include(GNUInstallDirs)
-elseif(USE_QT_VERSION EQUAL 6)
-    message("QT6")
-    find_package(Qt6
-      REQUIRED
-      COMPONENTS
-        Core
-        Gui
-        Widgets
-        Network
-        Xml
-        Svg
-        LinguistTools
-      OPTIONAL_COMPONENTS
-        Core5Compat
-    )
-    qt_standard_project_setup()
-else()
-    find_package(Qt6
-      REQUIRED
-      COMPONENTS
-        Core
-        Gui
-        Widgets
-        Network
-        Xml
-        Svg
-        LinguistTools
-      OPTIONAL_COMPONENTS
-        Core5Compat
-    )
-    qt_standard_project_setup()
-    if (NOT Qt6_FOUND)
-        find_package(Qt5
-          REQUIRED
-          COMPONENTS
-            Core
-            Gui
-            Widgets
-            Network
-            Xml
-            Svg
-            LinguistTools
-        )
-        set(CMAKE_AUTOMOC ON)
-        set(CMAKE_AUTOUIC ON)
-        set(CMAKE_AUTORCC ON)
-        include(GNUInstallDirs)
-    endif()
-endif()
+find_package(Qt6
+  REQUIRED
+  COMPONENTS
+    Core
+    Gui
+    Widgets
+    Network
+    Xml
+    Svg
+    LinguistTools
+    Concurrent
+    Sql
+  OPTIONAL_COMPONENTS
+    Core5Compat
+#        Zlib
+)
+qt_standard_project_setup()
+
 
 target_include_directories(${PROJECT_NAME}
     PUBLIC
