@@ -33,6 +33,7 @@ public:
     MapItem,
     Sequence,
     Comment,
+    Anchor,
   };
   enum TagHandleType
   {
@@ -42,7 +43,6 @@ public:
     Primary,
     Shorthand,
     NonSpecific,
-    Anchor, // an anchor NOT a tag type
   };
 
   YamlNode(QObject* parent = nullptr);
@@ -165,8 +165,8 @@ public:
       if (errors.testFlag(MissingMatchingQuote))
         list.append(
           tr("The scalar has a start ' or \" but no a matching closer"));
-//      if (errors.testFlag(EmptyFlowValue))
-//        list.append(tr("In flow values cannot be empty"));
+      //      if (errors.testFlag(EmptyFlowValue))
+      //        list.append(tr("In flow values cannot be empty"));
       // TODO complete the entire errors flags
     }
     return list;
@@ -190,8 +190,7 @@ public:
         list.append(
           tr("The use of literal tabs (\\t) characters is discouraged."));
       if (warnings.testFlag(IllegalCommentPosition))
-        list.append(
-          tr("Comments are technically illegal at this position."));
+        list.append(tr("Comments are technically illegal at this position."));
       // TODO complete the entire warnings flags
     }
     return list;
@@ -208,7 +207,6 @@ private:
   int m_column = 0;
   QTextCursor m_start;
   QTextCursor m_end;
-  //  int m_length;
 
   YamlErrors m_errors;
   YamlWarnings m_warnings;
@@ -221,12 +219,17 @@ class YamlDirective : public YamlNode
 public:
   YamlDirective(QObject* parent = nullptr);
 
-//  DirectiveType directiveType() const;
-//  void setDirectiveType(DirectiveType directiveType);
+  QTextCursor nameStart() const;
+  void setNameStart(const QTextCursor& nameStart);
+
+  QString name() const;
+  void setName(const QString& name);
 
 private:
-//  DirectiveType m_directiveType = NoDirective;
+  QString m_name;
+  QTextCursor m_nameStart;
 };
+
 //! \typedef typedef QSharedPointer<YamlDirective> SharedDirective
 //! typedef for a shared pointer to YamlDirective.
 typedef QSharedPointer<YamlDirective> SharedDirective;
@@ -237,19 +240,11 @@ class YamlReservedDirective : public YamlDirective
 public:
   YamlReservedDirective(QObject* parent = nullptr);
 
-  QString name() const;
-  void setName(const QString& name);
-
   void addParameter(QTextCursor cursor, const QString& param);
   QString parameter(QTextCursor cursor);
   QMap<QTextCursor, QString> parameters();
 
-  QTextCursor nameStart() const;
-  void setNameStart(const QTextCursor& nameStart);
-
 private:
-  QString m_name;
-  QTextCursor m_nameStart;
   QMap<QTextCursor, QString> m_parameters;
 };
 //! \typedef typedef QSharedPointer<YamlReservedDirective>
@@ -342,18 +337,50 @@ public:
 //! typedef for a shared pointer to YamlEnd.
 typedef QSharedPointer<YamlEnd> SharedEnd;
 
-class YamlAnchor : public YamlNode
+class YamlAnchorBase : public YamlNode
 {
   Q_OBJECT
 public:
-  YamlAnchor(QObject* parent = nullptr)
-    : YamlNode(parent)
-  {
-  }
+  YamlAnchorBase(QObject* parent = nullptr);
+
+  QString name() const;
+  void setName(const QString& name);
+
+  QTextCursor nameStart() const;
+  void setNameStart(const QTextCursor& nameStart);
+
+private:
+  QString m_name;
+  QTextCursor m_nameStart;
+};
+//! \typedef typedef QSharedPointer<YamlAnchor> SharedAnchor
+//! typedef for a shared pointer to YamlAnchor.
+typedef QSharedPointer<YamlAnchorBase> SharedAnchorBase;
+
+class YamlAnchor : public YamlAnchorBase
+{
+  Q_OBJECT
+public:
+  YamlAnchor(QObject* parent = nullptr);
+
 };
 //! \typedef typedef QSharedPointer<YamlAnchor> SharedAnchor
 //! typedef for a shared pointer to YamlAnchor.
 typedef QSharedPointer<YamlAnchor> SharedAnchor;
+
+class YamlAlias : public YamlAnchorBase
+{
+  Q_OBJECT
+public:
+  YamlAlias(QObject* parent = nullptr);
+
+private:
+  SharedAnchor m_anchor;
+
+};
+//! \typedef typedef QSharedPointer<YamlAnchor> SharedAnchor
+//! typedef for a shared pointer to YamlAnchor.
+typedef QSharedPointer<YamlAlias> SharedAlias;
 
 class YamlScalar : public YamlNode
 {

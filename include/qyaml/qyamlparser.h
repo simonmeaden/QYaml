@@ -164,13 +164,15 @@ private:
   static constexpr int VERSION_PATCH = 2;
   static const QString VERSION_STRING;
   static const QString VERSION_PATCH_STRING;
+  static const QString YAML;
+  static const QString TAG;
 
   //  static const QString DOCSTART;
   //  static const QString IND_DOCSTART;
   //  static const QString DOCEND;
   //  static const QString IND_DOCEND;
-  static const QRegularExpression YAML_DIRECTIVE;
-  static const QRegularExpression TAG_DIRECTIVE;
+  //  static const QRegularExpression YAML_DIRECTIVE;
+  //  static const QRegularExpression TAG_DIRECTIVE;
 
   SharedDocument parseDocumentStart(struct fy_event* event);
   bool resolveAnchors();
@@ -275,9 +277,10 @@ private:
   bool c_mapping_start(QChar c);
   bool c_mapping_end(QChar c);
   bool c_comment(QChar c);
+  //! non content or end of text
   bool b_comment(const QString& line);
   bool s_b_comment(const QString& s, QString& comment);
-  bool l_comment(const QString& s, int& start, QString& commentText);
+  bool l_comment(const QString& s, int& start, SharedComment& sharedcomment);
   bool b_as_line_feed(QChar c) { return (b_break(c)); }
   bool c_nb_comment_text(const QString& line, QString& comment);
   bool c_anchor(QChar c);
@@ -294,11 +297,12 @@ private:
   bool c_ns_esc_char(const QString& line);
   bool c_printable(QChar c);
   bool c_ns_properties(const QString s,
+                       int& start,
                        QString& result,
                        YamlNode::TagHandleType& type);
 
-  bool c_ns_tag_property(const QString& line,
-                         QString& tag,
+  bool c_ns_tag_property(const QString& text,
+                         SharedAnchorBase& base,
                          YamlNode::TagHandleType& type);
 
   bool c_verbatim_tag(const QString& line, QString& uri);
@@ -317,16 +321,298 @@ private:
   bool c_secondary_tag_handle(const QString& line);
   bool c_named_tag_handle(const QString& line, QString& tag);
 
-  bool c_ns_anchor_property(const QString& line, QString& anchor);
-
+  //! Returns true if c is a line feed character
   bool b_line_feed(QChar c);
+
+  //! Returns true if c is a carriage return character
   bool b_carriage_return(QChar c);
+
+  //! Returns true if a break character, acarriage return or a line feed
   bool b_char(QChar c);
+
   bool b_break(QChar c1, QChar c2);
   bool b_break(QChar c);
   bool b_as_line_feed(QChar& c);
   bool b_as_line_feed(QChar& c1, QChar& c2);
+
+  //! Returns true if c is a a non content character, a carriage return or
+  //! linefeed.
   bool b_non_content(QChar& c);
+
+  //! Returns true for an empty scalar, otherwise false.
+  bool e_scalar(const QString& s) { return s.isEmpty(); }
+
+  bool c_ns_alias_node(const QString& text, QString& name)
+  {
+    if (text.isEmpty())
+      return false;
+    auto i = 0;
+    auto c = text.at(i++);
+    if (c_alias(c)) {
+      if (ns_anchor_name(text, name)) {
+        return true;
+      }
+      c = text.at(i++);
+    }
+
+    return false;
+  }
+
+  bool ns_anchor_name(const QString& text, QString& name)
+  {
+    auto i = 0;
+    auto c = text.at(i++);
+    while (ns_anchor_char(c)) {
+      name += c;
+      c = text.at(i++);
+    }
+    if (!name.isEmpty())
+      return true;
+    return false;
+  }
+
+  //  bool c_ns_anchor_property(const QString& text, int& start, QString&
+  //  property)
+  //  {
+  //    if (text.isEmpty())
+  //      return false;
+  //    auto s = text.mid(start);
+  //    auto c = s.at(0);
+  //    if (!c_anchor(c))
+  //      return false;
+  //    if (ns_anchor_name(s, property)) {
+  //      return true;
+  //    }
+  //    return false;
+  //  }
+
+  bool c_ns_anchor_property(const QString& text,
+                            SharedAnchorBase& base);
+
+  bool nb_double_char(QChar c)
+  {
+    if (c_ns_esc_char(c) ||
+        (nb_json(c) && !(c_escape(c) || c_double_quote(c)))) {
+      return true;
+    }
+    return false;
+  }
+
+  bool ns_double_char(QChar c) { return (nb_double_char(c) && !s_white(c)); }
+
+  bool c_double_quoted(const QString& line, QString& name)
+  {
+    if (line.isEmpty())
+      return false;
+    auto s = line;
+    auto c = s.at(0);
+    s = s.mid(1);
+    if (!c_double_quote(c))
+      return false;
+    // TODO
+    return true;
+  }
+
+  bool c_flow_sequence(const QString& text, int& start)
+  {
+    if (text.isEmpty())
+      return false;
+    auto s = text;
+    auto c = s.at(0);
+    if (!c_sequence_start(c))
+      return false;
+    while (!s.isEmpty()) {
+      s = s.mid(1);
+      c = s.at(0);
+      if (c_sequence_end(c)) {
+        // TODO
+        break;
+      }
+      SharedComment comment = nullptr;
+      int len;
+      if (s_separate_lines(s, comment, len)) {
+      }
+    }
+    return false;
+  }
+
+  bool ns_flow_sequence_entries(const QString& text)
+  {
+    if (text.isEmpty())
+      return false;
+    auto s = text;
+    auto c = s.at(0);
+    s = s.mid(1);
+    if (c_mapping_key(c)) {
+
+    } else if (ns_flow_pair_entry(text)) {
+    }
+    return false;
+  }
+
+  bool ns_flow_pair_entry(const QString& text)
+  {
+    if (ns_flow_pair_yaml_key_entry(text) ||
+        c_ns_flow_map_empty_key_entry(text) ||
+        c_ns_flow_pair_json_key_entry(text)) {
+      return true;
+    }
+    return false;
+  }
+
+  bool ns_flow_pair_yaml_key_entry(const QString& text) { return false; }
+
+  bool c_ns_flow_map_empty_key_entry(const QString& text) { return false; }
+
+  bool c_ns_flow_pair_json_key_entry(const QString& text)
+  {
+    //    if (c_flow_json_node(c)) {
+    //    }
+    return false;
+  }
+
+  bool c_flow_json_node(const QString& text)
+  {
+    if (c_ns_properties(text)) {
+      return true;
+    }
+    return false;
+  }
+
+  bool c_ns_properties(const QString& text)
+  {
+    if (text.isEmpty())
+      return false;
+
+    SharedAnchorBase property=nullptr,anchor=nullptr,tag=nullptr;
+    YamlNode::TagHandleType type;
+    SharedComment comment = nullptr;
+    auto len = 0;
+    if (c_ns_tag_property(text, property, type)) {
+      if (s_separate_lines(text, comment, len)) {
+        if (c_ns_anchor_property(text,  property)) {
+
+          return true;
+        }
+      }
+    } else if (c_ns_anchor_property(text, anchor)) {
+      if (s_separate_lines(text, comment, len)) {
+        if (c_ns_tag_property(text, tag, type)) {
+
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  bool ns_flow_pair() {return false;}
+
+  bool ns_flow_node() {return false;}
+
+  bool ns_flow_sequence_entry() {return false;}
+
+  bool s_separate_lines(const QString& text, SharedComment comment, int& length)
+  {
+    auto s = text;
+    auto p = 0;
+    if (s_l_comments(s, p, comment)) {
+      if (comment) {
+        s = s.mid(comment->length());
+      }
+    }
+    if (s_flow_line_prefix(s, length)) {
+    }
+    return false;
+  }
+
+  bool s_separate_in_line(const QString& text, int& length)
+  {
+    if (text.isEmpty())
+      return false;
+    auto s = text;
+    auto len = 0;
+    while (!s.isEmpty()) {
+      auto c = s.at(0);
+      if (s_white(c)) {
+        len++;
+        continue;
+      } else if (c == Characters::NEWLINE) {
+        break;
+      }
+      s = s.mid(1);
+    }
+    if (len > 0) {
+      length = len;
+      return true;
+    }
+    return false;
+  }
+
+  bool s_flow_line_prefix(const QString& text, int& length)
+  {
+    auto indent = initial_whitespace(text);
+    auto len = 0;
+    if (s_separate_in_line(text, len)) {
+      length = indent + len;
+    } else {
+      length = indent;
+    }
+    if (length > 0)
+      return true;
+    return false;
+  }
+
+  bool s_separation_spaces(const QString& text,
+                           int& length,
+                           int& indent,
+                           QList<SharedComment> comments)
+  {
+    if (text.isEmpty()) {
+      length = 0;
+      return false;
+    }
+
+    auto len = 0;
+    auto s = text;
+    auto newline = false;
+    QChar c;
+    while (!s.isEmpty()) {
+      c = s.at(0);
+      if (s_white(c)) {
+        len++;
+        s = s.mid(1);
+        if (newline) {
+          indent++;
+        }
+        continue;
+      } else if (c == Characters::NEWLINE) {
+        len++;
+        s = s.mid(1);
+        indent = 0;
+        newline = true;
+        continue;
+      } else if (c == Characters::HASH) {
+        auto comm = s;
+        SharedComment sharedcomment = nullptr;
+        auto p = 0;
+        if (s_l_comments(comm, p, sharedcomment)) {
+          comments.append(sharedcomment);
+          len += sharedcomment->length();
+          s = s.mid(sharedcomment->length());
+        }
+      } else {
+        if (len > 0) {
+          length += len;
+          return true;
+        } else {
+          return false;
+        }
+      }
+      s = s.mid(1);
+    }
+    return false;
+  }
 
   bool s_space(QChar c);
   bool s_tab(QChar c);
@@ -384,15 +670,14 @@ private:
   bool ns_esc_32_bit(const QString& line);
   bool ns_tag_prefix(QChar c) { return false; }
   bool ns_anchor_char(QChar c);
-  bool ns_anchor_name(QString& line);
 
   bool nb_json(QChar c);
+
   void createDocIfNull(int start, SharedDocument& currentDoc);
-  //  SharedComment storeCommentIfExists(SharedDocument currentDoc,
-  //                                     QString comment,
-  //                                     int& start);
   void storeNode(SharedDocument currentDoc,
                  SharedNode node,
                  int& start,
                  int length);
+  void bypassTextAndUpdatePos(QString& s, int& pos, QString result);
+  void bypassWhitespaceAndUpdatePos(QString& s, int& pos);
 };

@@ -281,9 +281,7 @@ YamlMapItem::YamlMapItem(QObject* parent)
   m_type = MapItem;
 }
 
-YamlMapItem::YamlMapItem(const QString& key,
-                         SharedNode data,
-                         QObject* parent)
+YamlMapItem::YamlMapItem(const QString& key, SharedNode data, QObject* parent)
   : YamlNode(parent)
   , m_key{ key }
   , m_data{ data }
@@ -364,8 +362,7 @@ YamlSequence::YamlSequence(QObject* parent)
   m_type = Sequence;
 }
 
-YamlSequence::YamlSequence(QVector<SharedNode> sequence,
-                           QObject* parent)
+YamlSequence::YamlSequence(QVector<SharedNode> sequence, QObject* parent)
   : YamlNode(parent)
   , m_data(sequence)
 {
@@ -785,41 +782,22 @@ YamlReservedDirective::YamlReservedDirective(QObject* parent)
   m_type = ReservedDirective;
 }
 
-QString
-YamlReservedDirective::name() const
-{
-  return m_name;
-}
-
-void
-YamlReservedDirective::setName(const QString& name)
-{
-  m_name = name;
-}
-
 void
 YamlReservedDirective::addParameter(QTextCursor cursor, const QString& param)
 {
   m_parameters.insert(cursor, param);
 }
 
-QString YamlReservedDirective::parameter(QTextCursor cursor) {
+QString
+YamlReservedDirective::parameter(QTextCursor cursor)
+{
   return m_parameters.value(cursor, QString());
 }
 
-QMap<QTextCursor, QString> YamlReservedDirective::parameters()
+QMap<QTextCursor, QString>
+YamlReservedDirective::parameters()
 {
   return m_parameters;
-}
-
-QTextCursor YamlReservedDirective::nameStart() const
-{
-  return m_nameStart;
-}
-
-void YamlReservedDirective::setNameStart(const QTextCursor &nameStart)
-{
-  m_nameStart = nameStart;
 }
 
 //====================================================================
@@ -828,6 +806,30 @@ void YamlReservedDirective::setNameStart(const QTextCursor &nameStart)
 YamlDirective::YamlDirective(QObject* parent)
   : YamlNode(parent)
 {
+}
+
+QTextCursor
+YamlDirective::nameStart() const
+{
+  return m_nameStart;
+}
+
+void
+YamlDirective::setNameStart(const QTextCursor& nameStart)
+{
+  m_nameStart = nameStart;
+}
+
+QString
+YamlDirective::name() const
+{
+  return m_name;
+}
+
+void
+YamlDirective::setName(const QString& name)
+{
+  m_name = name;
 }
 
 //====================================================================
@@ -846,4 +848,53 @@ YamlEnd::YamlEnd(QObject* parent)
   : YamlNode(parent)
 {
   m_type = End;
+}
+
+//====================================================================
+//=== YamlAnchorBase
+//====================================================================
+YamlAnchorBase::YamlAnchorBase(QObject* parent)
+  : YamlNode(parent)
+{
+  m_type = Anchor;
+}
+
+QString
+YamlAnchorBase::name() const
+{
+  return m_name;
+}
+
+void
+YamlAnchorBase::setName(const QString& name)
+{
+  m_name = name;
+}
+
+QTextCursor
+YamlAnchorBase::nameStart() const
+{
+  return m_nameStart;
+}
+
+void
+YamlAnchorBase::setNameStart(const QTextCursor& nameStart)
+{
+  m_nameStart = nameStart;
+}
+
+//====================================================================
+//=== YamlAnchor
+//====================================================================
+YamlAnchor::YamlAnchor(QObject* parent)
+  : YamlAnchorBase(parent)
+{
+}
+
+//====================================================================
+//=== YamlAlias
+//====================================================================
+YamlAlias::YamlAlias(QObject* parent)
+  : YamlAnchorBase(parent)
+{
 }

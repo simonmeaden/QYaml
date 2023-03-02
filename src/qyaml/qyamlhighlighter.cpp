@@ -136,6 +136,9 @@ QYamlHighlighter::highlightBlock(const QString& text)
           setReservedFormat(node, blockStart, textLength);
           break;
         }
+        case YamlNode::Anchor:
+          // TODO
+          break;
         case YamlNode::Start: {
           setStartTagFormat(node, blockStart, textLength);
           break;
